@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>School Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'primary': 'var(--color-primary)',
+              'secondary': 'var(--color-secondary)',
+              'accent': 'var(--color-accent)',
+              'header': 'var(--color-header)',
+              'background': 'var(--color-background)',
+              'surface': 'var(--color-surface)',
+              'text-primary': 'var(--color-text-primary)',
+              'text-secondary': 'var(--color-text-secondary)',
+              'text-tertiary': 'var(--color-text-tertiary)',
+              'text-on-primary': 'var(--color-text-onPrimary)',
+              'text-on-accent': 'var(--color-text-onAccent)',
+              'border': 'var(--color-border)',
+              'border-dark': 'var(--color-borderDark)',
+              'danger': {
+                DEFAULT: 'var(--color-danger)',
+                light: 'var(--color-danger-light)',
+                text: 'var(--color-danger-text)',
+              },
+              'success': {
+                DEFAULT: 'var(--color-success)',
+                light: 'var(--color-success-light)',
+                text: 'var(--color-success-text)',
+              },
+              'warning': {
+                DEFAULT: 'var(--color-warning)',
+                dark: 'var(--color-warning-dark)',
+              },
+              'info': {
+                DEFAULT: 'var(--color-info)',
+                dark: 'var(--color-info-dark)',
+                light: 'var(--color-info-light)',
+                text: 'var(--color-info-text)',
+              },
+              'sidebar': {
+                background: 'var(--color-sidebar-background)',
+                text: 'var(--color-sidebar-text)',
+                textHover: 'var(--color-sidebar-textHover)',
+                border: 'var(--color-sidebar-border)',
+                bgHover: 'var(--color-sidebar-bgHover)'
+              },
+              'login': {
+                inputBg: 'var(--color-login-inputBg)',
+                inputBorder: 'var(--color-login-inputBorder)'
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.4",
+    "jwt-decode": "https://aistudiocdn.com/jwt-decode@^4.0.0",
+    "react-hook-form": "https://aistudiocdn.com/react-hook-form@^7.64.0",
+    "@react-pdf/renderer": "https://aistudiocdn.com/react-pdf-renderer@^3.4.4"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="text-text-primary">
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

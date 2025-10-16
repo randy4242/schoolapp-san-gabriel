@@ -1,0 +1,5 @@
+{
+  "name": "SchoolAppWeb Santiago",
+  "description": "A comprehensive school management system built with React, providing administrators and teachers with tools to manage users, courses, grades, notifications, and more.",
+  "requestFramePermissions": []
+}
