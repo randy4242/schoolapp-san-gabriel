@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 // This assumes chart.js is loaded from a CDN in index.html
 declare var Chart: any;
 
@@ -13,16 +13,29 @@ interface StudentAttendanceStatsModalProps {
     onClose: () => void;
 }
 
-const buildDoughnut = (ctx: CanvasRenderingContext2D, chartRef: React.MutableRefObject<any>, present: number, absent: number) => {
+const buildPie = (ctx: CanvasRenderingContext2D, chartRef: React.MutableRefObject<any>, present: number, absent: number, justifiedAbsent: number, late: number) => {
     if (chartRef.current) chartRef.current.destroy();
+    const total = present + absent + justifiedAbsent + late;
+    if (total === 0) return;
+
     chartRef.current = new Chart(ctx, {
-        type: 'doughnut',
+        type: 'pie',
         data: {
-            labels: ['Presente', 'Ausente'],
+            labels: ['Presente', 'Ausente (No just.)', 'Ausencia Justificada', 'Retardos'],
             datasets: [{
-                data: [present, absent],
-                backgroundColor: [theme.colors.success.DEFAULT, theme.colors.danger.DEFAULT],
-                hoverBackgroundColor: [theme.colors.success.light, theme.colors.danger.light]
+                data: [present, absent, justifiedAbsent, late],
+                backgroundColor: [
+                    theme.colors.success.DEFAULT,
+                    theme.colors.danger.DEFAULT,
+                    theme.colors.warning.DEFAULT,
+                    theme.colors.info.DEFAULT
+                ],
+                hoverBackgroundColor: [
+                    theme.colors.success.light,
+                    theme.colors.danger.light,
+                    theme.colors.warning.dark,
+                    theme.colors.info.light
+                ]
             }]
         },
         options: {
@@ -36,7 +49,7 @@ const buildDoughnut = (ctx: CanvasRenderingContext2D, chartRef: React.MutableRef
     });
 };
 
-const buildBar = (ctx: CanvasRenderingContext2D, chartRef: React.MutableRefObject<any>, labels: string[], presentData: number[], absentData: number[]) => {
+const buildBar = (ctx: CanvasRenderingContext2D, chartRef: React.MutableRefObject<any>, labels: string[], presentData: number[], absentData: number[], justifiedAbsentData: number[], lateData: number[]) => {
     if (chartRef.current) chartRef.current.destroy();
     chartRef.current = new Chart(ctx, {
         type: 'bar',
@@ -44,7 +57,9 @@ const buildBar = (ctx: CanvasRenderingContext2D, chartRef: React.MutableRefObjec
             labels,
             datasets: [
                 { label: 'Presente', data: presentData, backgroundColor: theme.colors.success.DEFAULT },
-                { label: 'Ausente', data: absentData, backgroundColor: theme.colors.danger.DEFAULT }
+                { label: 'Ausente', data: absentData, backgroundColor: theme.colors.danger.DEFAULT },
+                { label: 'Aus. Justif.', data: justifiedAbsentData, backgroundColor: theme.colors.warning.DEFAULT },
+                { label: 'Retardo', data: lateData, backgroundColor: theme.colors.info.DEFAULT }
             ]
         },
         options: {
@@ -99,19 +114,26 @@ const StudentAttendanceStatsModal: React.FC<StudentAttendanceStatsModalProps> = 
             const byCourseCtx = byCourseCanvasRef.current.getContext('2d');
             
             if (overallCtx) {
-                buildDoughnut(overallCtx, overallChartRef, stats.overall.present, stats.overall.absent);
+                buildPie(overallCtx, overallChartRef, stats.overall.present, stats.overall.absent, stats.overall.justifiedAbsent, stats.overall.late);
             }
             if (byCourseCtx) {
                  const labels = stats.byCourse.map(c => c.courseName);
                  const presentData = stats.byCourse.map(c => c.summary.present);
                  const absentData = stats.byCourse.map(c => c.summary.absent);
-                 buildBar(byCourseCtx, byCourseChartRef, labels, presentData, absentData);
+                 const justifiedAbsentData = stats.byCourse.map(c => c.summary.justifiedAbsent);
+                 const lateData = stats.byCourse.map(c => c.summary.late);
+                 buildBar(byCourseCtx, byCourseChartRef, labels, presentData, absentData, justifiedAbsentData, lateData);
             }
         }
         return () => {
-            if (overallChartRef.current) overallChartRef.current.destroy();
-            if (byCourseChartRef.current) byCourseChartRef.current.destroy();
+            if (overallChartRef.current) { overallChartRef.current.destroy(); overallChartRef.current = null; }
+            if (byCourseChartRef.current) { byCourseChartRef.current.destroy(); byCourseChartRef.current = null; }
         };
+    }, [stats]);
+
+    const attendanceRate = useMemo(() => {
+        if (!stats || !stats.overall || stats.overall.total === 0) return 0;
+        return ((stats.overall.present + stats.overall.justifiedAbsent) * 100) / stats.overall.total;
     }, [stats]);
 
     return (
@@ -144,15 +166,18 @@ const StudentAttendanceStatsModal: React.FC<StudentAttendanceStatsModalProps> = 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-surface p-4 rounded-md shadow-sm border">
                             <h5 className="font-bold text-lg mb-2">Resumen</h5>
-                            <ul className="space-y-2 text-sm">
-                                <li className="flex justify-between items-center"><span>Total de Asistencias Registradas:</span><strong className="text-info-dark">{stats.overall.total}</strong></li>
+                            <ul className="space-y-1 text-sm">
+                                <li className="flex justify-between items-center"><span>Total Registros:</span><strong className="text-info-dark">{stats.overall.total}</strong></li>
                                 <li className="flex justify-between items-center"><span>Presente:</span><strong className="text-success">{stats.overall.present}</strong></li>
-                                <li className="flex justify-between items-center"><span>Ausente:</span><strong className="text-danger">{stats.overall.absent}</strong></li>
-                                <li className="flex justify-between items-center pt-2 border-t"><span>Tasa de Asistencia:</span><strong className="text-lg">{stats.overall.attendanceRate?.toFixed(2) ?? 0}%</strong></li>
+                                <li className="flex justify-between items-center"><span>Ausente (No just.):</span><strong className="text-danger">{stats.overall.absent}</strong></li>
+                                <li className="flex justify-between items-center"><span>Ausencia Justificada:</span><strong className="text-warning-dark">{stats.overall.justifiedAbsent}</strong></li>
+                                <li className="flex justify-between items-center"><span>Retardos:</span><strong className="text-info-dark">{stats.overall.late}</strong></li>
+                                <li className="flex justify-between items-center"><span>Observaciones:</span><strong>{stats.overall.observation}</strong></li>
+                                <li className="flex justify-between items-center pt-2 border-t mt-2"><span>Tasa de Asistencia:</span><strong className="text-lg">{attendanceRate.toFixed(1)}%</strong></li>
                             </ul>
                         </div>
                         <div className="bg-surface p-4 rounded-md shadow-sm border">
-                            <h5 className="font-bold text-lg mb-2 text-center">Presente vs. Ausente</h5>
+                            <h5 className="font-bold text-lg mb-2 text-center">Distribución de Asistencia</h5>
                             <div className="h-48 flex justify-center items-center">
                                 <canvas ref={overallCanvasRef}></canvas>
                             </div>

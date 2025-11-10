@@ -48,15 +48,17 @@ const CourseListPage: React.FC = () => {
   const { user, hasPermission } = useAuth();
   const location = useLocation();
 
-  const canCreateCourse = useMemo(() => hasPermission([6]), [hasPermission]);
+  const isSuperAdmin = useMemo(() => hasPermission([6]), [hasPermission]);
 
   const fetchCoursesAndTeachers = async () => {
-    if (user?.schoolId) {
+    if (user?.schoolId && user.userId) {
       try {
         setLoading(true);
         const [courseData, teacherData] = await Promise.all([
-          apiService.getCourses(user.schoolId),
-          apiService.getTeachers(user.schoolId)
+          isSuperAdmin
+            ? apiService.getCourses(user.schoolId, searchTerm)
+            : apiService.getTaughtCourses(user.userId, user.schoolId),
+          isSuperAdmin ? apiService.getTeachers(user.schoolId) : Promise.resolve([])
         ]);
         setCourses(courseData);
         setTeachers(teacherData);
@@ -72,7 +74,8 @@ const CourseListPage: React.FC = () => {
 
   useEffect(() => {
     fetchCoursesAndTeachers();
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, isSuperAdmin]);
   
   useEffect(() => {
     if (location.state?.searchTerm) {
@@ -132,7 +135,7 @@ const CourseListPage: React.FC = () => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-text-primary">Lista de Cursos</h1>
-        {canCreateCourse && (
+        {isSuperAdmin && (
           <Link to="/courses/create" className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 transition-colors">
             Crear Curso
           </Link>
@@ -177,30 +180,40 @@ const CourseListPage: React.FC = () => {
                       <tr>
                           <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">Nombre</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">Descripción</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">Profesor/a</th>
+                          {isSuperAdmin && <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">Profesor/a</th>}
                           <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">Horario</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">Acciones</th>
                       </tr>
                       </thead>
                       <tbody className="bg-surface divide-y divide-border">
                       {coursesForDay.map(course => {
-                          const scheduleForThisDay = course.schedule.find(s => s.day === dayKey)?.time || '—';
+                          const schedulesForThisDay = course.schedule.filter(s => s.day === dayKey);
                           return (
                               <tr key={`${course.courseID}-${dayKey}`} className="hover:bg-background">
                                   <td className="px-6 py-4 whitespace-nowrap">{course.name}</td>
                                   <td className="px-6 py-4 whitespace-nowrap max-w-sm truncate">{course.description}</td>
-                                  <td className="px-6 py-4 whitespace-nowrap">{course.teacherName}</td>
-                                  <td className="px-6 py-4 whitespace-nowrap">{scheduleForThisDay}</td>
+                                  {isSuperAdmin && <td className="px-6 py-4 whitespace-nowrap">{course.teacherName}</td>}
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    {schedulesForThisDay.length > 0 ? (
+                                        schedulesForThisDay.map((s, index) => <div key={index}>{s.time}</div>)
+                                    ) : (
+                                        '—'
+                                    )}
+                                  </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                       <div className="flex items-center space-x-2">
-                                          <button onClick={() => setEditingCourse(course)} className="text-warning hover:text-warning-dark p-1 rounded-md hover:bg-warning/10" title="Editar">
-                                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                                          </button>
+                                          {isSuperAdmin && (
+                                            <>
+                                                <button onClick={() => setEditingCourse(course)} className="text-warning hover:text-warning-dark p-1 rounded-md hover:bg-warning/10" title="Editar">
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                                </button>
+                                                <button onClick={() => handleDelete(course.courseID)} className="text-danger hover:text-danger-text p-1 rounded-md hover:bg-danger-light" title="Eliminar">
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                </button>
+                                            </>
+                                          )}
                                           <button onClick={() => setViewingStudentsCourse(course)} className="text-info hover:text-info-dark p-1 rounded-md hover:bg-info-light" title="Ver Estudiantes">
                                               <EyeIcon />
-                                          </button>
-                                          <button onClick={() => handleDelete(course.courseID)} className="text-danger hover:text-danger-text p-1 rounded-md hover:bg-danger-light" title="Eliminar">
-                                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                           </button>
                                       </div>
                                   </td>

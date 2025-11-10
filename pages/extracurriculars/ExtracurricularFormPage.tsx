@@ -85,19 +85,19 @@ const ExtracurricularFormPage: React.FC = () => {
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-text-primary">Nombre</label>
-                        <input {...register('name', { required: 'El nombre es obligatorio' })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
+                        <input {...register('name', { required: 'El nombre es obligatorio' })} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
                         {errors.name && <p className="text-danger text-xs mt-1">{errors.name.message}</p>}
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-text-primary">Descripción</label>
-                        <textarea {...register('description', { required: 'La descripción es obligatoria' })} rows={3} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"></textarea>
+                        <textarea {...register('description', { required: 'La descripción es obligatoria' })} rows={3} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"></textarea>
                         {errors.description && <p className="text-danger text-xs mt-1">{errors.description.message}</p>}
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-text-primary">Día de la semana</label>
-                        <select {...register('dayOfWeek', { required: 'Debe seleccionar un día', valueAsNumber: true })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
+                        <select {...register('dayOfWeek', { required: 'Debe seleccionar un día', valueAsNumber: true })} className="mt-1 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
                             <option value="">-- Seleccione un día --</option>
                             <option value="1">Lunes</option>
                             <option value="2">Martes</option>
@@ -110,7 +110,7 @@ const ExtracurricularFormPage: React.FC = () => {
 
                     <div>
                         <label className="block text-sm font-medium text-text-primary">Profesor asignado</label>
-                        <select {...register('userID', { setValueAs: v => v ? parseInt(v) : null })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
+                        <select {...register('userID', { setValueAs: v => v ? parseInt(v) : null })} className="mt-1 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
                             <option value="">-- No asignar --</option>
                             {teachers.map(teacher => <option key={teacher.userID} value={teacher.userID}>{teacher.userName}</option>)}
                         </select>

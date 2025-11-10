@@ -164,7 +164,7 @@ const SendNotificationPage: React.FC = () => {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-text-primary">Tipo de notificación</label>
-          <select {...register('typeSelect')} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
+          <select {...register('typeSelect')} className="mt-1 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
             <option value="custom">Personalizada (escribir todo)</option>
             <option value="cobro_general">Aviso de cobro (general)</option>
             <option value="cobro_individual">Aviso de cobro (individual)</option>
@@ -175,7 +175,7 @@ const SendNotificationPage: React.FC = () => {
         
         <div>
           <label className="block text-sm font-medium text-text-primary">Destino</label>
-          <select {...register('target')} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
+          <select {...register('target')} className="mt-1 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
             <option value="all">Todos los usuarios</option>
             <option value="role">Por Rol</option>
             <option value="classroom">Por Salón</option>
@@ -186,7 +186,7 @@ const SendNotificationPage: React.FC = () => {
         {target === 'role' && (
           <div>
             <label className="block text-sm font-medium text-text-primary">Rol</label>
-            <select {...register('roleID', { valueAsNumber: true })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
+            <select {...register('roleID', { valueAsNumber: true })} className="mt-1 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
               {ROLES.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}
             </select>
           </div>
@@ -194,7 +194,7 @@ const SendNotificationPage: React.FC = () => {
         {target === 'classroom' && (
           <div>
             <label className="block text-sm font-medium text-text-primary">Salón</label>
-            <select {...register('classroomID', { valueAsNumber: true })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
+            <select {...register('classroomID', { valueAsNumber: true })} className="mt-1 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
               {classrooms.map(c => <option key={c.classroomID} value={c.classroomID}>{c.name}</option>)}
             </select>
           </div>
@@ -202,8 +202,8 @@ const SendNotificationPage: React.FC = () => {
         {target === 'user' && (
           <div>
             <label className="block text-sm font-medium text-text-primary">Usuario</label>
-            <input type="text" placeholder="Buscar usuario..." onChange={e => setUserSearch(e.target.value)} className="mb-2 mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
-            <select {...register('userID', { valueAsNumber: true })} className="block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
+            <input type="text" placeholder="Buscar usuario..." onChange={e => setUserSearch(e.target.value)} className="mb-2 mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
+            <select {...register('userID', { valueAsNumber: true })} className="block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
               <option value="">Seleccione un usuario...</option>
               {filteredUsers.map(u => <option key={u.userID} value={u.userID}>{u.userName}</option>)}
             </select>
@@ -216,19 +216,19 @@ const SendNotificationPage: React.FC = () => {
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-text-primary">Mes</label>
-                            <input {...register('tplMes')} placeholder="Ej. Septiembre" className="mt-1 block w-full px-3 py-2 border border-border rounded-md" />
+                            <input {...register('tplMes')} placeholder="Ej. Septiembre" className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md" />
                         </div>
                          <div>
                             <label className="block text-sm font-medium text-text-primary">Concepto</label>
-                            <input {...register('tplConcepto')} placeholder="Ej. cuota escolar" className="mt-1 block w-full px-3 py-2 border border-border rounded-md" />
+                            <input {...register('tplConcepto')} placeholder="Ej. cuota escolar" className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md" />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-text-primary">Monto</label>
-                            <input type="number" step="0.01" {...register('tplAmount')} className="mt-1 block w-full px-3 py-2 border border-border rounded-md" />
+                            <input type="number" step="0.01" {...register('tplAmount')} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md" />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-text-primary">Vence</label>
-                            <input type="date" {...register('tplDueDate')} className="mt-1 block w-full px-3 py-2 border border-border rounded-md" />
+                            <input type="date" {...register('tplDueDate')} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md" />
                         </div>
                     </div>
                 )}
@@ -236,19 +236,19 @@ const SendNotificationPage: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          <div>
                             <label className="block text-sm font-medium text-text-primary">Fecha</label>
-                            <input type="date" {...register('tplMeetingDate')} className="mt-1 block w-full px-3 py-2 border border-border rounded-md" />
+                            <input type="date" {...register('tplMeetingDate')} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md" />
                         </div>
                          <div>
                             <label className="block text-sm font-medium text-text-primary">Hora</label>
-                            <input type="time" {...register('tplMeetingTime')} className="mt-1 block w-full px-3 py-2 border border-border rounded-md" />
+                            <input type="time" {...register('tplMeetingTime')} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md" />
                         </div>
                         <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-text-primary">Lugar</label>
-                            <input {...register('tplLocation')} placeholder="Sala/Auditorio" className="mt-1 block w-full px-3 py-2 border border-border rounded-md" />
+                            <input {...register('tplLocation')} placeholder="Sala/Auditorio" className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md" />
                         </div>
                         <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-text-primary">Tema</label>
-                            <input {...register('tplTopic')} placeholder="Asuntos a tratar" className="mt-1 block w-full px-3 py-2 border border-border rounded-md" />
+                            <input {...register('tplTopic')} placeholder="Asuntos a tratar" className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md" />
                         </div>
                     </div>
                  )}
@@ -261,12 +261,12 @@ const SendNotificationPage: React.FC = () => {
         
         <div>
           <label className="block text-sm font-medium text-text-primary">Título</label>
-          <input {...register('title', { required: true })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
+          <input {...register('title', { required: true })} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
           {errors.title && <p className="text-danger text-xs mt-1">El título es requerido</p>}
         </div>
         <div>
           <label className="block text-sm font-medium text-text-primary">Contenido</label>
-          <textarea {...register('content', { required: true })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" rows={6}></textarea>
+          <textarea {...register('content', { required: true })} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" rows={6}></textarea>
           {errors.content && <p className="text-danger text-xs mt-1">El contenido es requerido</p>}
         </div>
         

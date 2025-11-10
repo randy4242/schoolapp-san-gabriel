@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
-import { Course } from '../../types';
+import { Course, Evaluation, AuthenticatedUser } from '../../types';
 
 type FormInputs = {
     title: string;
@@ -13,6 +13,49 @@ type FormInputs = {
     courseID: number;
 };
 
+/**
+ * Counts business days (Mon-Fri) passed since a start date.
+ */
+function countBusinessDays(startDate: Date, today: Date): number {
+    let count = 0;
+    const curDate = new Date(startDate.getTime());
+    curDate.setHours(0, 0, 0, 0); // Start of the day
+
+    const todayStart = new Date(today.getTime());
+    todayStart.setHours(0, 0, 0, 0);
+
+    if (todayStart < curDate) return 0;
+
+    while (curDate <= todayStart) {
+        const dayOfWeek = curDate.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) { // 0 = Sunday, 6 = Saturday
+            count++;
+        }
+        curDate.setDate(curDate.getDate() + 1);
+    }
+    // Subtract 1 to not count the creation day itself.
+    return count > 0 ? count - 1 : 0;
+}
+
+function isEvaluationEditable(evaluation: Evaluation, user: AuthenticatedUser | null): boolean {
+    if (!evaluation || !user) return false;
+    if (user.roleId === 6) return true; // Super Admin per user request
+    if (evaluation.description?.includes('@@OVERRIDE:')) return true;
+    
+    const today = new Date();
+
+    // Future evaluations are always editable
+    const evaluationDate = new Date(evaluation.date);
+    if (evaluationDate > today) return true;
+
+    // For past/today evaluations, check if within the 3 business day window from creation.
+    const creationDate = new Date(evaluation.createdAt);
+    const businessDaysPassed = countBusinessDays(creationDate, today);
+
+    return businessDaysPassed <= 3;
+}
+
+
 const EvaluationFormPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -21,6 +64,8 @@ const EvaluationFormPage: React.FC = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [taughtCourses, setTaughtCourses] = useState<Course[]>([]);
+    const [originalEvaluation, setOriginalEvaluation] = useState<Evaluation | null>(null);
+    const [isLocked, setIsLocked] = useState(false);
 
     const { register, handleSubmit, setValue, control, formState: { errors } } = useForm<FormInputs>();
 
@@ -34,18 +79,31 @@ const EvaluationFormPage: React.FC = () => {
 
                     if (isEditMode) {
                         const evalData = await apiService.getEvaluationById(parseInt(id!), user.schoolId);
+                        setOriginalEvaluation(evalData);
+
+                        if (!isEvaluationEditable(evalData, user)) {
+                            setIsLocked(true);
+                        }
+
                         setValue('title', evalData.title);
-                        setValue('date', evalData.date.split('T')[0]); // Format date for input
+                        setValue('date', evalData.date.split('T')[0]);
                         setValue('courseID', evalData.courseID);
                         
-                        // Parse description
-                        const descParts = evalData.description.split('@');
+                        const overrideMatch = evalData.description?.match(/@@OVERRIDE:.*$/);
+                        const cleanDescription = overrideMatch ? evalData.description.replace(overrideMatch[0], '').trim() : evalData.description;
+                        
+                        const descParts = cleanDescription.split('@');
                         if(descParts.length > 1) {
-                            const percent = descParts.pop();
-                            setValue('descriptionText', descParts.join('@'));
-                            setValue('descriptionPercent', Number(percent));
+                            const potentialPercent = descParts[descParts.length - 1];
+                            if (!isNaN(parseFloat(potentialPercent))) {
+                                const percent = descParts.pop();
+                                setValue('descriptionText', descParts.join('@'));
+                                setValue('descriptionPercent', Number(percent));
+                            } else {
+                                setValue('descriptionText', cleanDescription);
+                            }
                         } else {
-                            setValue('descriptionText', evalData.description);
+                            setValue('descriptionText', cleanDescription);
                         }
                     }
                 } catch (err) {
@@ -56,7 +114,8 @@ const EvaluationFormPage: React.FC = () => {
             }
         };
         fetchData();
-    }, [id, isEditMode, setValue, user]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id, isEditMode, user]);
 
     const onSubmit = async (data: FormInputs) => {
         if (!user?.schoolId || !user.userId) {
@@ -64,28 +123,49 @@ const EvaluationFormPage: React.FC = () => {
             return;
         }
         
+        if (isEditMode && !originalEvaluation) {
+            setError("No se ha podido cargar la información original de la evaluación para actualizarla.");
+            return;
+        }
+
         setError('');
         setLoading(true);
 
-        const description = `${data.descriptionText}@${data.descriptionPercent}`;
+        let finalDescription = data.descriptionText || '';
+        if (data.descriptionPercent !== undefined && data.descriptionPercent !== null && !isNaN(data.descriptionPercent)) {
+            finalDescription = `${finalDescription}@${data.descriptionPercent}`;
+        }
+            
+        const hadOverride = originalEvaluation?.description?.includes('@@OVERRIDE:');
+
+        // Preserve override only if user is Super Admin
+        if (user.roleId === 6 && hadOverride) {
+            const overrideMatch = originalEvaluation!.description.match(/@@OVERRIDE:.*$/);
+            if (overrideMatch) {
+                finalDescription = `${finalDescription} ${overrideMatch[0]}`;
+            }
+        }
 
         try {
             if (isEditMode) {
-                await apiService.updateEvaluation(parseInt(id!), {
+                const payload: Partial<Evaluation> = {
                     title: data.title,
-                    description,
+                    description: finalDescription,
                     date: data.date,
                     courseID: data.courseID,
-                });
+                    userID: originalEvaluation!.userID,
+                    schoolID: originalEvaluation!.schoolID,
+                };
+                await apiService.updateEvaluation(parseInt(id!), payload);
             } else {
                 await apiService.createEvaluation({
                     title: data.title,
-                    description,
+                    description: finalDescription,
                     date: data.date,
                     courseID: data.courseID,
                     userID: user.userId,
                     schoolID: user.schoolId,
-                });
+                } as any);
             }
             navigate('/evaluations');
         } catch (err: any) {
@@ -103,32 +183,37 @@ const EvaluationFormPage: React.FC = () => {
             
             {loading && isEditMode ? <p>Cargando datos...</p> : (
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                    {isLocked && (
+                        <div className="bg-warning/20 text-warning-dark p-3 rounded mb-4 text-sm">
+                            <b>Edición bloqueada:</b> Han pasado más de 3 días hábiles desde la creación de esta evaluación. Solo un Super Admin puede modificarla o conceder un permiso temporal.
+                        </div>
+                    )}
                     <div>
                         <label className="block text-sm font-medium text-text-primary">Título</label>
-                        <input {...register('title', { required: 'El título es requerido' })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
+                        <input {...register('title', { required: 'El título es requerido' })} disabled={isLocked} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent disabled:bg-background" />
                         {errors.title && <p className="text-danger text-xs mt-1">{errors.title.message}</p>}
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-text-primary">Descripción</label>
-                        <textarea {...register('descriptionText')} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"></textarea>
+                        <textarea {...register('descriptionText')} disabled={isLocked} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent disabled:bg-background"></textarea>
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-text-primary">Porcentaje (%)</label>
-                        <input type="number" {...register('descriptionPercent', { required: 'El porcentaje es requerido', valueAsNumber: true, min: 0, max: 100 })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
+                        <input type="number" {...register('descriptionPercent', { valueAsNumber: true, min: { value: 0, message: 'El valor mínimo es 0' }, max: { value: 100, message: 'El valor máximo es 100' } })} disabled={isLocked} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent disabled:bg-background" />
                         {errors.descriptionPercent && <p className="text-danger text-xs mt-1">{errors.descriptionPercent.message}</p>}
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-text-primary">Fecha</label>
-                        <input type="date" {...register('date', { required: 'La fecha es requerida' })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
+                        <input type="date" {...register('date', { required: 'La fecha es requerida' })} disabled={isLocked} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent disabled:bg-background" />
                         {errors.date && <p className="text-danger text-xs mt-1">{errors.date.message}</p>}
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-text-primary">Curso</label>
-                        <select {...register('courseID', { valueAsNumber: true, required: 'Debe seleccionar un curso' })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
+                        <select {...register('courseID', { valueAsNumber: true, required: 'Debe seleccionar un curso' })} disabled={isLocked} className="mt-1 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent disabled:bg-background">
                             <option value="">Seleccione un curso</option>
                             {taughtCourses.map(course => <option key={course.courseID} value={course.courseID}>{course.name}</option>)}
                         </select>
@@ -137,7 +222,7 @@ const EvaluationFormPage: React.FC = () => {
 
                     <div className="flex justify-end space-x-4 pt-4">
                         <Link to="/evaluations" className="bg-background text-text-primary py-2 px-4 rounded hover:bg-border transition-colors">Cancelar</Link>
-                        <button type="submit" disabled={loading} className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 disabled:bg-secondary transition-colors">
+                        <button type="submit" disabled={loading || isLocked} className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 disabled:bg-secondary disabled:cursor-not-allowed transition-colors">
                             {loading ? 'Guardando...' : 'Guardar'}
                         </button>
                     </div>

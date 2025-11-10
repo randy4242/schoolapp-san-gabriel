@@ -1,6 +1,10 @@
+
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import ThemeStyles from './components/ThemeStyles';
+import { useAuth } from './hooks/useAuth';
+
+// Layout and Pages
+import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import UserListPage from './pages/users/UserListPage';
@@ -9,20 +13,19 @@ import CourseListPage from './pages/courses/CourseListPage';
 import CourseFormPage from './pages/courses/CourseFormPage';
 import ClassroomListPage from './pages/classrooms/ClassroomListPage';
 import ClassroomFormPage from './pages/classrooms/ClassroomFormPage';
+import AssignStudentToClassroomPage from './pages/classrooms/AssignStudentToClassroomPage';
 import SendNotificationPage from './pages/notifications/SendNotificationPage';
-import ReportPage from './pages/reports/ReportsPage';
-import ProtectedRoute from './components/ProtectedRoute';
-import Layout from './components/Layout';
 import EvaluationListPage from './pages/evaluations/EvaluationListPage';
 import EvaluationFormPage from './pages/evaluations/EvaluationFormPage';
 import AssignGradesPage from './pages/evaluations/AssignGradesPage';
-import ViewRelationshipsPage from './pages/relationships/ViewRelationshipsPage';
+import ReportPage from './pages/reports/ReportsPage';
+import ReportViewerPage from './pages/reports/ReportViewerPage';
 import CreateRelationshipPage from './pages/relationships/CreateRelationshipPage';
+import ViewRelationshipsPage from './pages/relationships/ViewRelationshipsPage';
 import LapsoListPage from './pages/lapsos/LapsoListPage';
 import LapsoFormPage from './pages/lapsos/LapsoFormPage';
 import LoginHistoryPage from './pages/auth/LoginHistoryPage';
 import UserBlockPage from './pages/users/UserBlockPage';
-import ReportViewerPage from './pages/reports/ReportViewerPage';
 import ExtracurricularListPage from './pages/extracurriculars/ExtracurricularListPage';
 import ExtracurricularFormPage from './pages/extracurriculars/ExtracurricularFormPage';
 import CertificateListPage from './pages/certificates/CertificateListPage';
@@ -32,98 +35,150 @@ import ProductFormPage from './pages/products/ProductFormPage';
 import EnrollmentStudentListPage from './pages/enrollments/EnrollmentStudentListPage';
 import StudentEnrollmentListPage from './pages/enrollments/StudentEnrollmentListPage';
 import AssignCoursePage from './pages/enrollments/AssignCoursePage';
+import AssignClassroomPage from './pages/courses/AssignClassroomPage';
+import AttendanceListPage from './pages/attendance/AttendanceListPage';
+import GradeStatsPage from './pages/stats/GradeStatsPage';
+import InvoicePrintPage from './pages/invoices/InvoicePrintPage';
+import CuentasPorCobrarPage from './pages/administrative/CuentasPorCobrarPage';
+import InvoicesListPage from './pages/administrative/InvoicesListPage';
+import MonthlyGenerationPage from './pages/administrative/MonthlyGenerationPage';
+import PurchaseListPage from './pages/administrative/PurchaseListPage';
+import PurchaseFormPage from './pages/administrative/PurchaseFormPage';
+import PayrollListPage from './pages/administrative/PayrollListPage';
+import PayrollFormPage from './pages/administrative/PayrollFormPage';
+import PayrollDetailPage from './pages/administrative/PayrollDetailPage';
+import AnalyticsPage from './pages/analytics/AnalyticsPage';
+import GLPostingPage from './pages/gl/GLPostingPage';
+import GeneralLedgerPage from './pages/gl/GeneralLedgerPage';
+
+// Components
+import ProtectedRoute from './components/ProtectedRoute';
+import ThemeStyles from './components/ThemeStyles';
+
+// Context
+import { NotificationProvider } from './context/NotificationContext';
+import ProfilePage from './pages/profile/ProfilePage';
+import NotificationListPage from './pages/notifications/NotificationListPage';
 
 const App: React.FC = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-screen">Cargando...</div>;
+  }
+
   return (
     <>
       <ThemeStyles />
-      <div className="bg-background min-h-screen">
+      <NotificationProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route 
-            path="/" 
+            path="/*"
             element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
+              user ? (
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/login" replace />
+              )
             }
           >
-            <Route index element={<Navigate to="/dashboard" />} />
             <Route path="dashboard" element={<DashboardPage />} />
             
-            {/* User Routes */}
+            {/* Users */}
             <Route path="users" element={<UserListPage />} />
             <Route path="users/create" element={<UserFormPage />} />
             <Route path="users/edit/:id" element={<UserFormPage />} />
             <Route path="users/block/:id" element={<UserBlockPage />} />
-            
-            {/* Course Routes */}
+
+            {/* Courses */}
             <Route path="courses" element={<CourseListPage />} />
             <Route path="courses/create" element={<CourseFormPage />} />
+            <Route path="courses/assign-classroom" element={<AssignClassroomPage />} />
 
-            {/* Classroom Routes */}
+            {/* Classrooms */}
             <Route path="classrooms" element={<ClassroomListPage />} />
             <Route path="classrooms/create" element={<ClassroomFormPage />} />
-            <Route path="classrooms/edit/:id" element={<ClassroomFormPage />} />
+            <Route path="classrooms/assign-student" element={<AssignStudentToClassroomPage />} />
 
-            {/* Evaluation Routes */}
+            {/* Evaluations */}
             <Route path="evaluations" element={<EvaluationListPage />} />
             <Route path="evaluations/create" element={<EvaluationFormPage />} />
             <Route path="evaluations/edit/:id" element={<EvaluationFormPage />} />
             <Route path="evaluations/assign/:evaluationId" element={<AssignGradesPage />} />
             
-            {/* Notification Routes */}
+            {/* Notifications */}
             <Route path="notifications/send" element={<SendNotificationPage />} />
+            <Route path="notifications/list" element={<NotificationListPage />} />
             
-            {/* Report Routes */}
+            {/* Reports */}
             <Route path="reports" element={<ReportPage />} />
-            
-            {/* Relationship Routes */}
+            <Route path="report-viewer" element={<ReportViewerPage />} />
+
+            {/* Relationships */}
             <Route path="relationships" element={<ViewRelationshipsPage />} />
             <Route path="relationships/create" element={<CreateRelationshipPage />} />
 
-            {/* Lapso Routes */}
+            {/* Lapsos */}
             <Route path="lapsos" element={<LapsoListPage />} />
             <Route path="lapsos/create" element={<LapsoFormPage />} />
             <Route path="lapsos/edit/:id" element={<LapsoFormPage />} />
+            
+            {/* Auth */}
+            <Route path="login-history" element={<LoginHistoryPage />} />
 
-            {/* Extracurricular Routes */}
+            {/* Extracurriculars */}
             <Route path="extracurriculars" element={<ExtracurricularListPage />} />
             <Route path="extracurriculars/create" element={<ExtracurricularFormPage />} />
             <Route path="extracurriculars/edit/:id" element={<ExtracurricularFormPage />} />
-
-            {/* Certificate Routes */}
+            
+            {/* Certificates */}
             <Route path="certificates" element={<CertificateListPage />} />
             <Route path="certificates/generate" element={<CertificateFormPage />} />
 
-            {/* Product Routes */}
+            {/* Products */}
             <Route path="products" element={<ProductListPage />} />
             <Route path="products/create" element={<ProductFormPage />} />
             <Route path="products/edit/:id" element={<ProductFormPage />} />
 
-            {/* Enrollment Routes */}
+            {/* Enrollments */}
             <Route path="enrollments" element={<EnrollmentStudentListPage />} />
             <Route path="enrollments/student/:userId" element={<StudentEnrollmentListPage />} />
             <Route path="enrollments/assign/:userId" element={<AssignCoursePage />} />
 
-            {/* Auth Routes */}
-            <Route path="login-history" element={<LoginHistoryPage />} />
+            {/* Attendance */}
+            <Route path="attendance" element={<AttendanceListPage />} />
 
-            {/* Add other routes here as needed */}
-            <Route path="*" element={<Navigate to="/dashboard" />} />
+            {/* Stats */}
+            <Route path="stats/grades" element={<GradeStatsPage />} />
+
+            {/* Invoices */}
+            <Route path="invoices/print/:id" element={<InvoicePrintPage />} />
+
+            {/* Administrative */}
+            <Route path="cxc" element={<CuentasPorCobrarPage />} />
+            <Route path="invoices" element={<InvoicesListPage />} />
+            <Route path="administrative/monthly-generation" element={<MonthlyGenerationPage />} />
+            <Route path="purchases" element={<PurchaseListPage />} />
+            <Route path="purchases/create" element={<PurchaseFormPage />} />
+            <Route path="payroll" element={<PayrollListPage />} />
+            <Route path="payroll/create" element={<PayrollFormPage />} />
+            <Route path="payroll/detail/:id" element={<PayrollDetailPage />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
+            
+            {/* GL */}
+            <Route path="gl/postings" element={<GLPostingPage />} />
+            <Route path="gl/reports" element={<GeneralLedgerPage />} />
+            
+            {/* Profile */}
+            <Route path="profile" element={<ProfilePage />} />
+
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
-          
-          {/* Report Viewer Route (no layout) */}
-          <Route
-            path="/report-viewer"
-            element={
-              <ProtectedRoute>
-                <ReportViewerPage />
-              </ProtectedRoute>
-            }
-          />
         </Routes>
-      </div>
+      </NotificationProvider>
     </>
   );
 };

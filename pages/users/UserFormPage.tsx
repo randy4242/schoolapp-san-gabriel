@@ -4,6 +4,7 @@ import { useForm, SubmitHandler } from 'react-hook-form';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
 import { User, ROLES } from '../../types';
+import { EyeIcon, EyeOffIcon } from '../../components/icons';
 
 type FormInputs = Omit<User, 'userID' | 'schoolID' | 'isBlocked'> & { password?: string };
 
@@ -14,6 +15,7 @@ const UserFormPage: React.FC = () => {
   const isEditMode = Boolean(id);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   
   const [cedulaPrefix, setCedulaPrefix] = useState('V');
   const [cedulaNumber, setCedulaNumber] = useState('');
@@ -70,6 +72,7 @@ const UserFormPage: React.FC = () => {
       if (isEditMode) {
         const payload: Partial<User> & { passwordHash?: string } = {
             ...data,
+            userID: parseInt(id!),
             schoolID: user.schoolId,
         };
         if(data.password) {
@@ -102,13 +105,13 @@ const UserFormPage: React.FC = () => {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-text-primary">Nombre de Usuario</label>
-            <input {...register('userName', { required: 'El nombre es requerido' })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
+            <input {...register('userName', { required: 'El nombre es requerido' })} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
             {errors.userName && <p className="text-danger text-xs mt-1">{errors.userName.message}</p>}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-text-primary">Email</label>
-            <input type="email" {...register('email', { required: 'El email es requerido' })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
+            <input type="email" {...register('email', { required: 'El email es requerido' })} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
             {errors.email && <p className="text-danger text-xs mt-1">{errors.email.message}</p>}
           </div>
           
@@ -118,7 +121,7 @@ const UserFormPage: React.FC = () => {
                 <select 
                 value={cedulaPrefix} 
                 onChange={(e) => setCedulaPrefix(e.target.value)}
-                className="mt-1 block w-24 px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"
+                className="mt-1 block w-24 px-3 py-2 border border-border bg-surface text-text-primary rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"
                 >
                 <option value="V">V</option>
                 <option value="CE">CE</option>
@@ -130,7 +133,7 @@ const UserFormPage: React.FC = () => {
                 value={cedulaNumber}
                 onChange={(e) => setCedulaNumber(e.target.value)}
                 placeholder="Número de Cédula"
-                className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" 
+                className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" 
                 />
                 <button 
                     type="button" 
@@ -147,19 +150,33 @@ const UserFormPage: React.FC = () => {
 
           <div>
             <label className="block text-sm font-medium text-text-primary">Teléfono</label>
-            <input {...register('phoneNumber', { required: 'El teléfono es requerido' })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
+            <input {...register('phoneNumber', { required: 'El teléfono es requerido' })} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
             {errors.phoneNumber && <p className="text-danger text-xs mt-1">{errors.phoneNumber.message}</p>}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-text-primary">Contraseña {isEditMode && '(dejar en blanco para no cambiar)'}</label>
-            <input type="password" {...register('password', { required: !isEditMode, minLength: { value: isEditMode ? 0 : 1, message: 'La contraseña es requerida' }})} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
+            <div className="relative mt-1">
+                <input 
+                    type={showPassword ? 'text' : 'password'} 
+                    {...register('password', { required: !isEditMode, minLength: { value: isEditMode ? 0 : 1, message: 'La contraseña es requerida' }})} 
+                    className="block w-full pl-3 pr-10 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" 
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-text-tertiary"
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                >
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+            </div>
             {errors.password && <p className="text-danger text-xs mt-1">{errors.password.message}</p>}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-text-primary">Rol</label>
-            <select {...register('roleID', { valueAsNumber: true, required: 'El rol es requerido' })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
+            <select {...register('roleID', { valueAsNumber: true, required: 'El rol es requerido' })} className="mt-1 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent">
                 <option value="">Seleccione un rol</option>
                 {ROLES.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}
             </select>

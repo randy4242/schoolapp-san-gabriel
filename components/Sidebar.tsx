@@ -1,7 +1,9 @@
+
+
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { ChevronDownIcon, LogoutIcon, HomeIcon, UsersIcon, BookOpenIcon, SchoolIcon, ClipboardListIcon, LinkIcon, BeakerIcon, CalendarIcon, DocumentTextIcon, CreditCardIcon, CubeIcon, BellIcon, UserCheckIcon, ChartBarIcon, DocumentReportIcon, HistoryIcon } from './icons';
+import { ChevronDownIcon, LogoutIcon, HomeIcon, UsersIcon, BookOpenIcon, SchoolIcon, ClipboardListIcon, LinkIcon, BeakerIcon, CalendarIcon, DocumentTextIcon, CreditCardIcon, CubeIcon, BellIcon, UserCheckIcon, ChartBarIcon, DocumentReportIcon, HistoryIcon, UserCircleIcon, ClipboardCheckIcon, CashIcon, ShoppingCartIcon, BriefcaseIcon, TrendingUpIcon, LedgerIcon } from './icons';
 
 interface NavLink {
   to: string;
@@ -18,28 +20,25 @@ interface NavSection {
   permission: (has: (roles: number[]) => boolean) => boolean;
 }
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpen: boolean;
+  setIsOpen: (isOpen: boolean) => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   const { user, logout, hasPermission } = useAuth();
   const location = useLocation();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    const currentOpenSections: Record<string, boolean> = {};
-    navSections.forEach(section => {
-      if (section.links.some(link => location.pathname.startsWith(link.to))) {
-        currentOpenSections[section.label] = true;
-      }
-    });
-    setOpenSections(currentOpenSections);
+    // Close sidebar on navigation on smaller screens
+    if (isOpen) {
+      setIsOpen(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
-  const toggleSection = (label: string) => {
-    setOpenSections(prev => ({ ...prev, [label]: !prev[label] }));
-  };
-
   const Is = (roles: number[]) => hasPermission(roles);
-  const IsSuperAdmin = Is([6]);
-  const IsTeacherAny = Is([2, 9, 10]);
 
   const navSections: NavSection[] = [
     {
@@ -54,10 +53,11 @@ const Sidebar: React.FC = () => {
     {
       label: 'Cursos',
       icon: <BookOpenIcon />,
-      permission: (has) => has([6, 7, 2, 9, 10]),
+      permission: (has) => has([6, 7]),
       links: [
-        { to: '/courses', label: 'Ver Cursos', icon: <span />, permission: (has) => has([6, 7, 2, 9, 10]) },
+        { to: '/courses', label: 'Ver Cursos', icon: <span />, permission: (has) => has([6, 7]) },
         { to: '/courses/create', label: 'Crear Curso', icon: <span />, permission: (has) => has([6]) },
+        { to: '/courses/assign-classroom', label: 'Asignar Salón', icon: <span />, permission: (has) => has([6]) },
       ].filter(l => l.permission(Is))
     },
     {
@@ -67,11 +67,12 @@ const Sidebar: React.FC = () => {
       links: [
         { to: '/classrooms', label: 'Ver Salones', icon: <span />, permission: (has) => has([6, 7, 2, 9, 10]) },
         { to: '/classrooms/create', label: 'Crear Salon', icon: <span />, permission: (has) => has([6]) },
+        { to: '/classrooms/assign-student', label: 'Asignar Estudiante', icon: <span />, permission: (has) => has([6]) },
       ].filter(l => l.permission(Is))
     },
     {
       label: 'Evaluaciones',
-      icon: <ClipboardListIcon />,
+      icon: <ClipboardCheckIcon />,
       permission: (has) => has([6, 7, 8, 2, 9, 10]),
       links: [
         { to: '/evaluations', label: 'Ver Evaluaciones', icon: <span />, permission: (has) => has([6, 7, 8, 2, 9, 10]) },
@@ -87,57 +88,110 @@ const Sidebar: React.FC = () => {
         { to: '/extracurriculars/create', label: 'Crear Actividad', icon: <span />, permission: (has) => has([6]) },
       ].filter(l => l.permission(Is))
     },
+    {
+      label: 'Administrativo',
+      icon: <DocumentReportIcon />,
+      permission: (has) => has([6, 7]),
+      links: [
+        { to: '/cxc', label: 'Cuentas Por Cobrar', icon: <CashIcon />, permission: (has) => has([6, 7]) },
+        { to: '/invoices', label: 'Cuentas Generales', icon: <ClipboardListIcon />, permission: (has) => has([6, 7]) },
+        { to: '/purchases', label: 'Compras', icon: <ShoppingCartIcon />, permission: (has) => has([6, 7]) },
+        { to: '/payroll', label: 'Nómina', icon: <BriefcaseIcon />, permission: (has) => has([6, 7]) },
+        { to: '/administrative/monthly-generation', label: 'Generación Mensual', icon: <CalendarIcon />, permission: (has) => has([6, 7]) },
+      ].filter(l => l.permission(Is))
+    },
+    {
+      label: 'Libro Contable',
+      icon: <LedgerIcon />,
+      permission: (has) => has([6, 7]),
+      links: [
+        { to: '/gl/postings', label: 'Posteos GL', icon: <span />, permission: (has) => has([6, 7]) },
+        { to: '/gl/reports', label: 'Reportes Contables', icon: <span />, permission: (has) => has([6, 7]) },
+      ].filter(l => l.permission(Is))
+    },
      // Add other sections here based on _Layout.cshtml logic
   ];
   
   const singleLinks: (NavLink & { permission: (has: (roles: number[]) => boolean) => boolean })[] = [
       { to: '/lapsos', label: 'Lapsos', icon: <CalendarIcon />, permission: (has) => has([6]) },
+      { to: '/courses', label: 'Horario', icon: <HistoryIcon />, permission: (has) => has([2, 9, 10]) && !has([6, 7]) },
+      { to: '/attendance', label: 'Asistencia', icon: <ClipboardListIcon />, permission: (has) => has([6, 2, 9, 10]) },
       { to: '/relationships', label: 'Relaciones', icon: <LinkIcon />, permission: (has) => has([6]) },
       { to: '/enrollments', label: 'Inscripciones', icon: <UserCheckIcon />, permission: (has) => has([6]) },
       { to: '/certificates', label: 'Constancias', icon: <DocumentTextIcon />, permission: (has) => has([6]) },
       { to: '/products', label: 'Productos', icon: <CreditCardIcon />, permission: (has) => has([6]) },
-      { to: '/notifications/send', label: 'Notificaciones', icon: <BellIcon />, permission: (has) => has([6, 2, 9, 10]) },
+      { to: '/notifications/send', label: 'Enviar Notificaciones', icon: <BellIcon />, permission: (has) => has([6, 2, 9, 10]) },
       { to: '/reports', label: 'Reportes', icon: <DocumentReportIcon />, permission: (has) => has([6]) },
+      { to: '/stats/grades', label: 'Estadísticas de Notas', icon: <ChartBarIcon />, permission: (has) => has([6, 7]) },
+      { to: '/analytics', label: 'Análisis y Reportes', icon: <TrendingUpIcon />, permission: (has) => has([6, 7]) },
       { to: '/login-history', label: 'Historial de Logins', icon: <HistoryIcon />, permission: (has) => has([6]) },
   ];
+  
+  useEffect(() => {
+    const currentOpenSections: Record<string, boolean> = {};
+    navSections.forEach(section => {
+      if (section.links.some(link => location.pathname.startsWith(link.to))) {
+        currentOpenSections[section.label] = true;
+      }
+    });
+    setOpenSections(currentOpenSections);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
+  const toggleSection = (label: string) => {
+    setOpenSections(prev => ({ ...prev, [label]: !prev[label] }));
+  };
+
+
+  const sidebarClasses = `
+    bg-sidebar-background text-text-on-primary flex-col h-full flex-shrink-0
+    fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out
+    md:relative md:flex md:translate-x-0
+    ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+  `;
 
   return (
-    <div className="w-64 bg-sidebar-background text-text-on-primary flex flex-col h-full">
-      <div className="p-4 border-b border-sidebar-border">
-        <h1 className="text-xl font-bold text-accent">Colegio San Gabriel Arcángel</h1>
-        <span className="text-sm text-sidebar-text truncate">{user?.email}</span>
-      </div>
-      <nav className="flex-1 px-2 py-4 space-y-2 overflow-y-auto">
-        <Link to="/dashboard" className="flex items-center px-4 py-2 text-sidebar-text hover:bg-sidebar-bgHover rounded-md">
-          <HomeIcon />
-          <span className="ml-3">Inicio</span>
-        </Link>
-        <hr className="border-sidebar-border my-2" />
+    <>
+      <div 
+        className={`fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity md:hidden ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setIsOpen(false)}
+        aria-hidden="true"
+      ></div>
+      <div className={sidebarClasses}>
+        <div className="p-4 border-b border-sidebar-border">
+          <h1 className="text-xl font-bold text-accent">SchoolApp</h1>
+          <span className="text-sm text-sidebar-text truncate">{user?.email}</span>
+        </div>
+        <nav className="flex-1 px-2 py-4 space-y-2 overflow-y-auto">
+          <Link to="/dashboard" className="flex items-center px-4 py-2 text-sidebar-text hover:bg-sidebar-bgHover rounded-md">
+            <HomeIcon />
+            <span className="ml-3">Inicio</span>
+          </Link>
+          <hr className="border-sidebar-border my-2" />
 
-        {navSections.filter(s => s.permission(Is)).map((section) => (
-          <div key={section.label}>
-            <button onClick={() => toggleSection(section.label)} className="w-full flex items-center justify-between px-4 py-2 text-sidebar-text hover:bg-sidebar-bgHover rounded-md">
-              <span className="flex items-center">
-                {section.icon}
-                <span className="ml-3">{section.label}</span>
-              </span>
-              <ChevronDownIcon className={`transition-transform duration-200 ${openSections[section.label] ? 'rotate-180' : ''}`} />
-            </button>
-            {openSections[section.label] && (
-              <div className="pl-8 py-2 space-y-2">
-                {section.links.map(link => (
-                  <Link key={link.to} to={link.to} className="block px-4 py-2 text-sm text-sidebar-text hover:text-sidebar-textHover hover:bg-sidebar-bgHover rounded-md">
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-            )}
-            <hr className="border-sidebar-border my-2" />
-          </div>
-        ))}
+          {navSections.filter(s => s.permission(Is)).map((section) => (
+            <div key={section.label}>
+              <button onClick={() => toggleSection(section.label)} className="w-full flex items-center justify-between px-4 py-2 text-sidebar-text hover:bg-sidebar-bgHover rounded-md">
+                <span className="flex items-center">
+                  {section.icon}
+                  <span className="ml-3">{section.label}</span>
+                </span>
+                <ChevronDownIcon className={`transition-transform duration-200 ${openSections[section.label] ? 'rotate-180' : ''}`} />
+              </button>
+              {openSections[section.label] && (
+                <div className="pl-8 py-2 space-y-2">
+                  {section.links.map(link => (
+                    <Link key={link.to} to={link.to} className="block px-4 py-2 text-sm text-sidebar-text hover:text-sidebar-textHover hover:bg-sidebar-bgHover rounded-md">
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+              <hr className="border-sidebar-border my-2" />
+            </div>
+          ))}
 
-        {singleLinks.filter(l => l.permission(Is)).map(link => (
+          {singleLinks.filter(l => l.permission(Is)).map(link => (
              <div key={link.to}>
              <Link to={link.to} className="flex items-center px-4 py-2 text-sidebar-text hover:bg-sidebar-bgHover rounded-md">
                {link.icon}
@@ -145,15 +199,16 @@ const Sidebar: React.FC = () => {
              </Link>
              <hr className="border-sidebar-border my-2" />
            </div>
-        ))}
-      </nav>
-      <div className="p-4 border-t border-sidebar-border">
-        <button onClick={logout} className="w-full flex items-center px-4 py-2 text-white bg-danger/90 hover:bg-danger font-semibold rounded-md transition-colors">
-          <LogoutIcon />
-          <span className="ml-3">Cerrar sesión</span>
-        </button>
+          ))}
+        </nav>
+        <div className="p-4 border-t border-sidebar-border">
+          <button onClick={logout} className="w-full flex items-center px-4 py-2 text-text-on-primary bg-danger hover:bg-danger-dark font-semibold rounded-md transition-colors">
+            <LogoutIcon />
+            <span className="ml-3">Cerrar sesión</span>
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

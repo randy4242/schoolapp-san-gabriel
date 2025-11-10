@@ -1,11 +1,14 @@
-// FIX: Corrected typo from StudentGrdesGroup to StudentGradesGroup.
-import { AuthenticatedUser, DashboardStats, User, Course, Teacher, Classroom, Student, ClassroomAttendanceStats, Lapso, StudentGradesVM, StudentAttendanceStats, LapsoGradeApiItem, StudentGradeItem, StudentGradesGroup, AuthResponse, Evaluation, Grade, Child, LoginHistoryRecord, Payment, Notification, ReportEmgClassroomResponse, ExtracurricularActivity, Certificate, CertificateGeneratePayload, Product, ProductWithAudiences, ProductAudience, AudiencePayload, Enrollment } from '../types';
+import { AuthenticatedUser, DashboardStats, User, Course, Teacher, Classroom, Student, ClassroomAttendanceStats, Lapso, StudentGradesVM, StudentAttendanceStats, LapsoGradeApiItem, StudentGradeItem, StudentGradesGroup, AuthResponse, Evaluation, Grade, Child, LoginHistoryRecord, Payment, Notification, ReportEmgClassroomResponse, ExtracurricularActivity, Certificate, CertificateGeneratePayload, Product, ProductWithAudiences, ProductAudience, AudiencePayload, Enrollment, ReportRrdeaClassroomResponse, Parent, UserDetails, AttendanceRecord, AttendanceEditPayload, ExtracurricularEnrollmentPayload, EnrolledStudent, ClassroomAverage, ClassroomStudentAveragesResponse, MedicalInfo, ApprovePaymentResponse, InvoicePrintVM, PendingInvoice, PaginatedInvoices, GenerateInvoicesRunDto, MonthlyGenerationResult, MonthlyARSummary, PaginatedPurchases, PurchaseCreatePayload, PurchaseDetail, PurchaseCreationResponse, PayrollRunPayload, PayrollPreviewResponse, PayrollRunResponse, PaginatedPayrolls, PayrollDetail, BaseSalaryUpdatePayload, Chat, Message, CreateGroupChatDto, SendMessageDto, PnlReportResponse, SalesByProductResponse, InventorySnapshotResponse, InventoryKardexResponse, ArAgingSummaryResponse, ArAgingByCustomerResponse, TrialBalanceRow, LedgerRow, IncomeStatement, BalanceSheet } from '../types';
 
 const BASE_URL = "https://apicamorucoSA.somee.com/";
+
 
 export interface GlobalSearchResult {
     users: User[];
     courses: Course[];
+    evaluations: Evaluation[];
+    classrooms: Classroom[];
+    extracurriculars: ExtracurricularActivity[];
 }
 
 class ApiService {
@@ -111,14 +114,17 @@ class ApiService {
   }
   
   // Search
-  async globalSearch(schoolId: number, term: string): Promise<GlobalSearchResult> {
+  async globalSearch(schoolId: number, userId: number, term: string): Promise<GlobalSearchResult> {
     if (!term.trim()) {
-        return { users: [], courses: [] };
+        return { users: [], courses: [], evaluations: [], classrooms: [], extracurriculars: [] };
     }
 
-    const [allUsers, allCourses] = await Promise.all([
-        this.getUsers(schoolId),
-        this.getCourses(schoolId) // Fetch all courses to filter client-side
+    const [allUsers, allCourses, allClassrooms, allExtracurriculars, allEvaluations] = await Promise.all([
+        this.getUsers(schoolId).catch(() => []),
+        this.getCourses(schoolId).catch(() => []),
+        this.getClassrooms(schoolId).catch(() => []),
+        this.getExtracurriculars(schoolId).catch(() => []),
+        this.getEvaluations(schoolId, userId).catch(() => []),
     ]);
 
     const lowerCaseTerm = term.toLowerCase();
@@ -133,8 +139,29 @@ class ApiService {
         c.name.toLowerCase().includes(lowerCaseTerm) ||
         c.description.toLowerCase().includes(lowerCaseTerm)
     );
+      
+    const filteredClassrooms = allClassrooms.filter(c =>
+        c.name.toLowerCase().includes(lowerCaseTerm) ||
+        c.description.toLowerCase().includes(lowerCaseTerm)
+    );
 
-    return { users: filteredUsers, courses: filteredCourses };
+    const filteredExtracurriculars = allExtracurriculars.filter(e =>
+        e.name.toLowerCase().includes(lowerCaseTerm) ||
+        e.description.toLowerCase().includes(lowerCaseTerm)
+    );
+
+    const filteredEvaluations = allEvaluations.filter(e =>
+        e.title.toLowerCase().includes(lowerCaseTerm) ||
+        e.description.toLowerCase().includes(lowerCaseTerm)
+    );
+
+    return { 
+        users: filteredUsers, 
+        courses: filteredCourses,
+        evaluations: filteredEvaluations,
+        classrooms: filteredClassrooms,
+        extracurriculars: filteredExtracurriculars
+    };
   }
 
   // Users
@@ -146,6 +173,14 @@ class ApiService {
     return this.request<User>(`api/users/${id}?schoolId=${schoolId}`);
   }
   
+  async getUserDetails(userId: number, schoolId: number): Promise<UserDetails> {
+    return this.request<UserDetails>(`api/users/${userId}/details?schoolId=${schoolId}`);
+  }
+  
+  async getMedicalInfo(userId: number, schoolId: number): Promise<MedicalInfo> {
+    return this.request<MedicalInfo>(`api/medical-info/${userId}?schoolid=${schoolId}`);
+  }
+
   async createUser(user: Omit<User, 'userID' | 'isBlocked'> & { passwordHash: string }): Promise<User> {
     return this.request<User>('api/auth/register', {
       method: 'POST',
@@ -219,15 +254,14 @@ class ApiService {
       });
   }
 
+  async assignClassroomToCourse(courseId: number, classroomId: number): Promise<void> {
+    return this.request<void>(`api/courses/${courseId}/assign-classroom/${classroomId}`, {
+        method: 'PUT',
+    });
+  }
+
   async getStudentsByCourse(courseId: number, schoolId: number): Promise<Student[]> {
-      // Placeholder implementation. Replace with actual API call.
-      console.log(`Fetching students for course ${courseId} in school ${schoolId}`);
-      return Promise.resolve([
-          { studentID: 101, studentName: 'Ana García' },
-          { studentID: 102, studentName: 'Carlos Martinez' },
-          { studentID: 103, studentName: 'Lucía Rodriguez' },
-          { studentID: 104, studentName: 'Javier Fernández' },
-      ]);
+      return this.request<Student[]>(`api/enrollments/course/${courseId}/students?schoolId=${schoolId}`);
   }
 
   async getStudentsByClassroom(classroomId: number, schoolId: number): Promise<User[]> {
@@ -329,6 +363,12 @@ class ApiService {
     });
   }
   
+  async assignStudentToClassroom(userId: number, classroomId: number): Promise<void> {
+    return this.request<void>(`api/classrooms/assign/${userId}?classroomId=${classroomId}`, {
+        method: 'PUT',
+    });
+  }
+
   // Lapsos
   async getLapsos(schoolId: number): Promise<Lapso[]> {
     return this.request<Lapso[]>(`api/lapsos?schoolId=${schoolId}`);
@@ -409,6 +449,14 @@ class ApiService {
         });
     }
 
+    async getSchoolClassroomAverages(schoolId: number): Promise<ClassroomAverage[]> {
+        return this.request<ClassroomAverage[]>(`api/grades/school/${schoolId}/classroom-averages`);
+    }
+    
+    async getClassroomStudentAverages(classroomId: number, schoolId: number): Promise<ClassroomStudentAveragesResponse> {
+        return this.request<ClassroomStudentAveragesResponse>(`api/grades/classroom/${classroomId}/student-averages?schoolId=${schoolId}`);
+    }
+
   // Notifications
   async sendNotification(payload: any): Promise<void> {
     return this.request<void>('api/notifications', {
@@ -417,9 +465,20 @@ class ApiService {
     });
   }
 
-  async getParentNotifications(parentId: number, schoolId: number): Promise<Notification[]> {
-      // The provided backend endpoint only uses userID. School is likely derived from the token.
-      return this.request<Notification[]>(`api/notifications?userID=${parentId}`);
+  async getUserNotifications(userId: number): Promise<Notification[]> {
+      return this.request<Notification[]>(`api/notifications?userID=${userId}`);
+  }
+
+  async markAllNotificationsAsRead(userId: number): Promise<void> {
+    return this.request<void>(`api/notifications/read-all?userID=${userId}`, {
+        method: 'PUT'
+    });
+  }
+  
+  async markNotificationAsRead(notificationId: number): Promise<void> {
+      return this.request<void>(`api/notifications/${notificationId}/read`, {
+          method: 'PUT'
+      });
   }
 
   async sendToAll(schoolId: number, notification: { title: string, content: string }): Promise<void> {
@@ -448,17 +507,17 @@ class ApiService {
       return this.request<Payment[]>(`api/payments/parent/${parentId}?schoolId=${schoolId}`);
   }
 
-  async approvePayment(paymentId: number, reviewedByUserId: number, comment: string | null): Promise<any> {
+  async approvePayment(paymentId: number, reviewedByUserId: number, comment: string | null): Promise<ApprovePaymentResponse> {
       const payload = { reviewedByUserId, comment };
-      return this.request<any>(`api/payments/${paymentId}/approve`, {
+      return this.request<ApprovePaymentResponse>(`api/payments/${paymentId}/approve`, {
           method: 'PUT',
           body: JSON.stringify(payload)
       });
   }
 
-  async rejectPayment(paymentId: number, reviewedByUserId: number, comment: string | null): Promise<any> {
+  async rejectPayment(paymentId: number, reviewedByUserId: number, comment: string | null): Promise<void> {
       const payload = { reviewedByUserId, comment };
-      return this.request<any>(`api/payments/${paymentId}/reject`, {
+      return this.request<void>(`api/payments/${paymentId}/reject`, {
           method: 'PUT',
           body: JSON.stringify(payload)
       });
@@ -474,6 +533,15 @@ class ApiService {
   async getEmgClassroomReport(classroomId: number, schoolId: number, lapsoIds: number[]): Promise<ReportEmgClassroomResponse> {
     const lapsosQuery = lapsoIds.join(',');
     return this.request<ReportEmgClassroomResponse>(`api/reports/emg/classroom/${classroomId}?schoolId=${schoolId}&lapsos=${lapsosQuery}`);
+  }
+
+  async getEmgStudentReport(studentId: number, schoolId: number, lapsoIds: number[]): Promise<ReportEmgClassroomResponse> {
+      const lapsosQuery = lapsoIds.join(',');
+      return this.request<ReportEmgClassroomResponse>(`api/reports/emg/student/${studentId}?schoolId=${schoolId}&lapsos=${lapsosQuery}`);
+  }
+
+  async getRrdeaClassroomReport(classroomId: number, schoolId: number): Promise<ReportRrdeaClassroomResponse> {
+      return this.request<ReportRrdeaClassroomResponse>(`api/reports/rrdea/classroom/${classroomId}?schoolId=${schoolId}`);
   }
 
   // Relationships
@@ -497,6 +565,22 @@ class ApiService {
         userID: c.userID,
         userName: c.studentName, // map studentName to userName for frontend consistency
         email: c.email
+    }));
+  }
+
+  async getParentsOfChild(childId: number, schoolId: number): Promise<Parent[]> {
+    interface RawParent {
+        relationID: number;
+        userID: number;
+        userName: string;
+        email: string;
+    }
+    const rawParents = await this.request<RawParent[]>(`api/relationships/user/${childId}/parents?schoolId=${schoolId}`);
+    return rawParents.map(p => ({
+        relationID: p.relationID,
+        userID: p.userID,
+        userName: p.userName,
+        email: p.email
     }));
   }
 
@@ -542,6 +626,18 @@ class ApiService {
     });
   }
 
+  async enrollStudentInActivity(payload: ExtracurricularEnrollmentPayload): Promise<any> {
+    return this.request<any>('api/extracurriculars/enrollments/enroll', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    });
+}
+
+  async getStudentsByActivity(activityId: number, schoolId: number): Promise<EnrolledStudent[]> {
+    return this.request<EnrolledStudent[]>(`api/extracurriculars/enrollments/activity/${activityId}/students?schoolId=${schoolId}`);
+  }
+
+
   // Certificates
   async getCertificates(schoolId: number): Promise<Certificate[]> {
     return this.request<Certificate[]>(`api/Certificates?schoolId=${schoolId}`);
@@ -566,35 +662,37 @@ class ApiService {
 
   // Products
   async getProductsWithAudiences(schoolId: number): Promise<ProductWithAudiences[]> {
-    const products = await this.request<Product[]>(`api/products?schoolId=${schoolId}`);
-    const result: ProductWithAudiences[] = [];
-    for (const p of products) {
-        const audiences = await this.request<ProductAudience[]>(`api/products/${p.productID}/audiences?schoolId=${schoolId}`);
-        result.push({ product: p, audiences });
-    }
-    return result;
+    // The new API for products (on santarosa) does not seem to have audiences.
+    // We will return an empty array for audiences to maintain compatibility with existing components.
+    const products = await this.request<Product[]>(`api/products?schoolid=${schoolId}`);
+    return products.map(p => ({
+        product: p,
+        audiences: []
+    }));
   }
 
   async createProduct(payload: Omit<Product, 'productID' | 'createdAt'> & { audiences: AudiencePayload[] }): Promise<Product> {
-      const apiPayload = { ...payload, Audiences: payload.audiences };
+      // The new product API is on the purchases URL and does not seem to use audiences.
+      const { audiences, ...productPayload } = payload;
       return this.request<Product>('api/products', {
           method: 'POST',
-          body: JSON.stringify(apiPayload)
+          body: JSON.stringify(productPayload)
       });
   }
 
   async getProductWithAudiences(productId: number, schoolId: number): Promise<{ product: Product; audiences: AudiencePayload[] }> {
-      const product = await this.request<Product>(`api/products/${productId}`);
-      const audiencesRaw = await this.request<ProductAudience[]>(`api/products/${productId}/audiences?schoolId=${schoolId}`);
-      const audiences = audiencesRaw.map(a => ({ targetType: a.targetTypeRaw, targetID: a.targetID }));
-      return { product, audiences };
+      // The new API is on the purchases URL and does not seem to use audiences.
+      const product = await this.request<Product>(`api/products/${productId}?schoolid=${schoolId}`);
+      return { product, audiences: [] };
   }
 
-  async updateProduct(productId: number, payload: Partial<Omit<Product, 'productID' | 'createdAt' | 'schoolID'>> & { audiences: AudiencePayload[] }): Promise<void> {
-      const apiPayload = { ...payload, Audiences: payload.audiences };
-      return this.request<void>(`api/products/${productId}`, {
+  async updateProduct(productId: number, payload: Partial<Product> & { audiences: AudiencePayload[] }): Promise<void> {
+      // The new product API is on the purchases URL and does not seem to use audiences.
+      const { audiences, ...productPayload } = payload;
+      // It's assumed payload contains schoolID, and the new API expects it in the query.
+      return this.request<void>(`api/products/${productId}?schoolid=${payload.schoolID}`, {
           method: 'PUT',
-          body: JSON.stringify(apiPayload)
+          body: JSON.stringify(productPayload)
       });
   }
 
@@ -615,6 +713,235 @@ class ApiService {
           method: 'DELETE'
       });
   }
+  
+  // Attendance
+  async getAttendanceByCourse(courseId: number, schoolId: number): Promise<AttendanceRecord[]> {
+    return this.request<AttendanceRecord[]>(`api/attendance/course/${courseId}?schoolId=${schoolId}`);
+  }
+
+  async updateAttendance(attendanceId: number, payload: AttendanceEditPayload, modifiedById: number): Promise<void> {
+    return this.request<void>(`api/attendance/${attendanceId}?modifiedBy=${modifiedById}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteAttendance(attendanceId: number, schoolId: number): Promise<void> {
+    return this.request<void>(`api/attendance/${attendanceId}?schoolId=${schoolId}`, {
+        method: 'DELETE',
+    });
+  }
+
+  // Invoices
+  async getInvoiceForPrint(invoiceId: number): Promise<InvoicePrintVM> {
+    return this.request<InvoicePrintVM>(`api/invoices/${invoiceId}`);
+  }
+
+  async getPendingInvoices(schoolId: number): Promise<PendingInvoice[]> {
+    return this.request<PendingInvoice[]>(`api/invoices/pending?schoolId=${schoolId}`);
+  }
+
+  async getInvoices(schoolId: number, params: { status?: string; from?: string; to?: string; q?: string; page?: number; pageSize?: number }): Promise<PaginatedInvoices> {
+    const query = new URLSearchParams({
+      schoolId: schoolId.toString(),
+      page: (params.page || 1).toString(),
+      pageSize: (params.pageSize || 20).toString(),
+    });
+    if (params.status) query.append('status', params.status);
+    if (params.from) query.append('from', params.from);
+    if (params.to) query.append('to', params.to);
+    if (params.q) query.append('q', params.q);
+    
+    return this.request<PaginatedInvoices>(`api/invoices?${query.toString()}`);
+  }
+
+  async generateMonthly(dto: GenerateInvoicesRunDto): Promise<MonthlyGenerationResult> {
+    const endpoint = dto.DryRun ? 'api/invoices/generate-monthly/preview' : 'api/invoices/generate-monthly/run';
+    return this.request<MonthlyGenerationResult>(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(dto)
+    });
+  }
+  
+  async getMonthlyArSummary(schoolId: number, year?: number, currency?: string): Promise<MonthlyARSummary[]> {
+    const params = new URLSearchParams({ schoolId: schoolId.toString() });
+    if (year) params.append('year', year.toString());
+    if (currency) params.append('currency', currency);
+    return this.request<MonthlyARSummary[]>(`api/invoices/monthly-ar?${params.toString()}`);
+  }
+
+  // Purchases
+  async getPurchases(schoolId: number, params: { page?: number; pageSize?: number }): Promise<PaginatedPurchases> {
+    const query = new URLSearchParams({
+      schoolid: schoolId.toString(),
+      page: (params.page || 1).toString(),
+      pageSize: (params.pageSize || 20).toString(),
+    });
+    return this.request<PaginatedPurchases>(`api/purchases?${query.toString()}`);
+  }
+
+  async getPurchaseById(purchaseId: number, schoolId: number): Promise<PurchaseDetail> {
+    return this.request<PurchaseDetail>(`api/purchases/${purchaseId}?schoolid=${schoolId}`);
+  }
+
+  async createPurchase(payload: PurchaseCreatePayload): Promise<PurchaseCreationResponse> {
+    return this.request<PurchaseCreationResponse>('api/purchases', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+    });
+  }
+
+  async annulPurchase(purchaseId: number, schoolId: number): Promise<void> {
+      return this.request<void>(`api/purchases/${purchaseId}/annul?schoolid=${schoolId}`, {
+          method: 'PUT'
+      });
+  }
+
+  // Payroll
+  async previewPayroll(payload: PayrollRunPayload): Promise<PayrollPreviewResponse> {
+    const endpoint = `api/payroll/preview?schoolid=${payload.schoolID}`;
+    return this.request<PayrollPreviewResponse>(endpoint, {
+        method: 'POST',
+        body: JSON.stringify({ ...payload, dryRun: true })
+    });
+  }
+
+  async runPayroll(payload: PayrollRunPayload): Promise<PayrollRunResponse> {
+      const endpoint = `api/payroll/run?schoolid=${payload.schoolID}`;
+      return this.request<PayrollRunResponse>(endpoint, {
+          method: 'POST',
+          body: JSON.stringify({ ...payload, dryRun: false })
+      });
+  }
+
+  async getPayrolls(params: { schoolId: number; year?: number; month?: number; page: number; pageSize: number }): Promise<PaginatedPayrolls> {
+      const query = new URLSearchParams({
+          schoolId: params.schoolId.toString(),
+          page: params.page.toString(),
+          pageSize: params.pageSize.toString(),
+      });
+      if (params.year) query.append('year', params.year.toString());
+      if (params.month) query.append('month', params.month.toString());
+      return this.request<PaginatedPayrolls>(`api/payroll?${query.toString()}`);
+  }
+
+  async getPayrollById(payrollId: number): Promise<PayrollDetail> {
+      return this.request<PayrollDetail>(`api/payroll/${payrollId}`);
+  }
+
+  async updateBaseSalary(payload: BaseSalaryUpdatePayload): Promise<void> {
+      return this.request<void>('api/payroll/base-salary', {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+      });
+  }
+  
+  async closePayrollPeriod(params: { schoolId: number, year: number, month: number }): Promise<void> {
+      const query = new URLSearchParams({
+          schoolId: params.schoolId.toString(),
+          year: params.year.toString(),
+          month: params.month.toString(),
+      });
+      return this.request<void>(`api/payroll/close?${query.toString()}`, { method: 'PUT' });
+  }
+
+  async annulPayroll(payrollId: number, reason: string | null): Promise<void> {
+      return this.request<void>(`api/payroll/${payrollId}/annul`, {
+          method: 'PUT',
+          body: JSON.stringify({ reason })
+      });
+  }
+
+  // Chat
+  async getUserChats(userId: number): Promise<Chat[]> {
+    return this.request<Chat[]>(`api/chats?userID=${userId}`);
+  }
+
+  async getChatMessages(chatId: number): Promise<Message[]> {
+    return this.request<Message[]>(`api/chats/${chatId}/messages`);
+  }
+
+  async sendMessage(payload: SendMessageDto): Promise<Message> {
+    return this.request<Message>('api/chats/messages', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    });
+  }
+
+  async createGroupChat(payload: CreateGroupChatDto): Promise<Chat> {
+    return this.request<Chat>('api/chats', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteChat(chatId: number): Promise<void> {
+    return this.request<void>(`api/chats/${chatId}`, {
+      method: 'DELETE',
+    });
+  }
+  
+  // Analytics
+    async getPnlReport(schoolId: number, year: number): Promise<PnlReportResponse> {
+        return this.request<PnlReportResponse>(`api/analytics/finance/pnl?schoolId=${schoolId}&year=${year}`);
+    }
+    async getSalesByProductReport(schoolId: number, from: string, to: string, top: number): Promise<SalesByProductResponse> {
+        return this.request<SalesByProductResponse>(`api/analytics/sales/by-product?schoolId=${schoolId}&from=${from}&to=${to}&top=${top}`);
+    }
+    async getInventorySnapshot(schoolId: number): Promise<InventorySnapshotResponse> {
+        return this.request<InventorySnapshotResponse>(`api/analytics/inventory/snapshot?schoolId=${schoolId}`);
+    }
+    async getInventoryKardex(schoolId: number, productId: number, from: string, to: string): Promise<InventoryKardexResponse> {
+        return this.request<InventoryKardexResponse>(`api/analytics/inventory/kardex?schoolId=${schoolId}&productId=${productId}&from=${from}&to=${to}`);
+    }
+    async getArAgingSummary(schoolId: number, asOf: string): Promise<ArAgingSummaryResponse> {
+        return this.request<ArAgingSummaryResponse>(`api/analytics/ar/aging?schoolId=${schoolId}&asOf=${asOf}`);
+    }
+    async getArAgingByCustomer(schoolId: number, asOf: string): Promise<ArAgingByCustomerResponse> {
+        return this.request<ArAgingByCustomerResponse>(`api/analytics/ar/aging-by-customer?schoolId=${schoolId}&asOf=${asOf}`);
+    }
+
+    // General Ledger (GL)
+    private glRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+        return this.request<T>(`api/gl/${endpoint}`, options);
+    }
+    
+    // GL Postings
+    async postGlInvoice(invoiceId: number): Promise<void> {
+        return this.glRequest<void>(`post/invoice/${invoiceId}`, { method: 'POST' });
+    }
+    async postGlPayment(paymentId: number): Promise<void> {
+        return this.glRequest<void>(`post/payment/${paymentId}`, { method: 'POST' });
+    }
+    async postGlPurchase(purchaseId: number): Promise<void> {
+        return this.glRequest<void>(`post/purchase/${purchaseId}`, { method: 'POST' });
+    }
+    async postGlPayroll(payrollId: number): Promise<void> {
+        return this.glRequest<void>(`post/payroll/${payrollId}`, { method: 'POST' });
+    }
+    async postGlInventoryMovement(movementId: number): Promise<void> {
+        return this.glRequest<void>(`post/inventory-movement/${movementId}`, { method: 'POST' });
+    }
+
+    // GL Reports
+    async getTrialBalance(schoolId: number): Promise<TrialBalanceRow[]> {
+        return this.glRequest<TrialBalanceRow[]>(`trial-balance?schoolId=${schoolId}`);
+    }
+
+    async getLedger(schoolId: number, accountCode: string, from: string, to: string): Promise<LedgerRow[]> {
+        const params = new URLSearchParams({ schoolId: schoolId.toString(), accountCode, from, to });
+        return this.glRequest<LedgerRow[]>(`ledger?${params.toString()}`);
+    }
+
+    async getIncomeStatement(schoolId: number, from: string, to: string): Promise<IncomeStatement> {
+        const params = new URLSearchParams({ schoolId: schoolId.toString(), from, to });
+        return this.glRequest<IncomeStatement>(`income-statement?${params.toString()}`);
+    }
+
+    async getBalanceSheet(schoolId: number, asOf: string): Promise<BalanceSheet> {
+        const params = new URLSearchParams({ schoolId: schoolId.toString(), asOf });
+        return this.glRequest<BalanceSheet>(`balance-sheet?${params.toString()}`);
+    }
 }
 
 export const apiService = new ApiService();

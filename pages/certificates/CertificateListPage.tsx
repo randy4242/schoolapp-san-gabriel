@@ -78,11 +78,11 @@ const CertificateListPage: React.FC = () => {
                         <table className="min-w-full divide-y divide-border">
                             <thead className="bg-header">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Tipo</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Estudiante</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Fecha de Emisión</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Firmante</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Acciones</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Tipo</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Estudiante</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Fecha de Emisión</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Firmante</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-surface divide-y divide-border">

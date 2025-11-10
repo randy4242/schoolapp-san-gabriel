@@ -45,59 +45,59 @@ const ProductListPage: React.FC = () => {
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-800">Productos</h1>
+                <h1 className="text-2xl font-bold text-text-primary">Productos</h1>
                 {canCreate && (
-                    <Link to="/products/create" className="bg-main-blue text-white py-2 px-4 rounded hover:bg-black transition-colors">
+                    <Link to="/products/create" className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-primary/90 transition-colors">
                         Crear Producto
                     </Link>
                 )}
             </div>
 
             {loading && <p>Cargando productos...</p>}
-            {error && <p className="text-red-500">{error}</p>}
+            {error && <p className="text-danger">{error}</p>}
 
             {!loading && !error && (
                 products.length > 0 ? (
-                    <div className="bg-white shadow-md rounded-lg overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-main-blue">
+                    <div className="bg-surface shadow-md rounded-lg overflow-x-auto">
+                        <table className="min-w-full divide-y divide-border">
+                            <thead className="bg-header">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">SKU</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Nombre</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Precio</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Estado</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Audiencia</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Acciones</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">SKU</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Nombre</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Precio</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Estado</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Audiencia</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Acciones</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody className="bg-surface divide-y divide-border">
                                 {products.map(({ product, audiences }) => {
                                     const displayAud = audiences.some(a => (a.targetTypeRaw ?? "").toLowerCase() === 'all')
                                         ? audiences.filter(a => (a.targetTypeRaw ?? "").toLowerCase() === 'all')
                                         : audiences;
 
                                     return (
-                                        <tr key={product.productID} className="hover:bg-gray-50">
+                                        <tr key={product.productID} className="hover:bg-background">
                                             <td className="px-6 py-4 whitespace-nowrap">{product.sku}</td>
                                             <td className="px-6 py-4 whitespace-nowrap font-medium">{product.name}</td>
                                             <td className="px-6 py-4 whitespace-nowrap">{product.salePrice.toFixed(2)}</td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${product.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${product.isActive ? 'bg-success-light text-success-text' : 'bg-background text-text-secondary'}`}>
                                                     {product.isActive ? 'Activo' : 'Inactivo'}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex flex-wrap gap-1">
                                                 {displayAud.length === 0 
-                                                  ? <span className="text-xs text-gray-500">Todos</span>
+                                                  ? <span className="text-xs text-text-tertiary">Todos</span>
                                                   : displayAud.map(a => (
-                                                      <span key={a.productAudienceID} className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">{AudienceToText(a)}</span>
+                                                      <span key={a.productAudienceID} className="text-xs bg-info-light text-info-text px-2 py-0.5 rounded-full">{AudienceToText(a)}</span>
                                                   ))
                                                 }
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                <Link to={`/products/edit/${product.productID}`} className="text-yellow-600 hover:text-yellow-800">Editar</Link>
+                                                <Link to={`/products/edit/${product.productID}`} className="text-warning hover:text-warning-dark">Editar</Link>
                                             </td>
                                         </tr>
                                     )
@@ -106,8 +106,8 @@ const ProductListPage: React.FC = () => {
                         </table>
                     </div>
                 ) : (
-                    <div className="text-center py-8 bg-white rounded-lg shadow-md">
-                        <p className="text-gray-500">No hay productos registrados.</p>
+                    <div className="text-center py-8 bg-surface rounded-lg shadow-md">
+                        <p className="text-text-secondary">No hay productos registrados.</p>
                     </div>
                 )
             )}

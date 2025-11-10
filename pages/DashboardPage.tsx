@@ -4,6 +4,7 @@ import { apiService } from '../services/apiService';
 import { DashboardStats } from '../types';
 import { Link } from 'react-router-dom';
 import { CubeIcon, DocumentTextIcon, CreditCardIcon, UserCheckIcon } from '../components/icons';
+import { theme } from '../styles/theme';
 
 const TotalUsersIcon: React.FC = () => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" className="w-full h-full">
@@ -40,7 +41,7 @@ const CoursesIcon: React.FC = () => (
 
 const StatCard: React.FC<{ title: string; value: number | string; icon: React.ReactElement }> = ({ title, value, icon }) => (
     <div className="bg-surface p-6 rounded-lg shadow-md flex items-center">
-        <div className="bg-primary text-white rounded-full h-12 w-12 flex items-center justify-center p-2">
+        <div className="bg-primary text-text-on-primary rounded-full h-12 w-12 flex items-center justify-center p-2" style={{ color: theme.colors.text.onPrimary }}>
             {icon}
         </div>
         <div className="ml-4">

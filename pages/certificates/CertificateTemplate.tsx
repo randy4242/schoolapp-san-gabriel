@@ -8,7 +8,7 @@ interface CertificateTemplateProps {
 
 const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ data, templateRef }) => {
     const {
-        schoolName = "Colegio San Gabriel Arcángel",
+        schoolName = "SchoolApp",
         schoolCode = "S1934D0810",
         certificateType = "CONSTANCIA",
         content,
@@ -112,7 +112,7 @@ const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ data, templat
             <div className="cert-page" ref={templateRef}>
                 <div className="cert-header">
                     <div className="cert-logo">
-                        <img src="https://i.postimg.cc/SjJ1qy2t/logo-camoruco.png" alt="Escudo Camoruco" />
+                        <img src="https://i.postimg.cc/TwvTg2P6/LOGO-VERTICAL-BLANCO-Y-ROJO.png" alt="SchoolApp Logo" />
                     </div>
                     <div className="cert-header-text">
                         <div className="cert-school-name">{schoolName}</div>

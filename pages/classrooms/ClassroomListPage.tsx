@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
 import { Classroom } from '../../types';
@@ -18,6 +18,8 @@ const ClassroomListPage: React.FC = () => {
   const [editingClassroom, setEditingClassroom] = useState<Classroom | null>(null);
   const [viewingStudentsClassroom, setViewingStudentsClassroom] = useState<Classroom | null>(null);
   const [viewingStatsClassroom, setViewingStatsClassroom] = useState<Classroom | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const location = useLocation();
 
   const canManageClassrooms = useMemo(() => hasPermission([6]), [hasPermission]);
 
@@ -41,6 +43,12 @@ const ClassroomListPage: React.FC = () => {
     fetchClassrooms();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+  
+  useEffect(() => {
+    if (location.state?.searchTerm) {
+      setSearchTerm(location.state.searchTerm);
+    }
+  }, [location.state]);
 
   const handleSaveSuccess = () => {
       setEditingClassroom(null);
@@ -58,6 +66,13 @@ const ClassroomListPage: React.FC = () => {
       }
     }
   };
+  
+  const filteredClassrooms = useMemo(() => {
+    return classrooms.filter(c => 
+        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.description.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [classrooms, searchTerm]);
 
   return (
     <div>
@@ -69,6 +84,16 @@ const ClassroomListPage: React.FC = () => {
           </Link>
         )}
       </div>
+      
+      <div className="mb-6">
+        <input 
+            type="text"
+            placeholder="Buscar por nombre o descripción..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full md:w-1/2 p-2 border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"
+        />
+      </div>
 
       {loading && <p>Cargando salones...</p>}
       {error && <p className="text-danger">{error}</p>}
@@ -78,13 +103,13 @@ const ClassroomListPage: React.FC = () => {
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-header">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Nombre</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Descripción</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Acciones</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Nombre</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Descripción</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Acciones</th>
               </tr>
             </thead>
             <tbody className="bg-surface divide-y divide-border">
-              {classrooms.map((c) => (
+              {filteredClassrooms.map((c) => (
                 <tr key={c.classroomID} className="hover:bg-background">
                   <td className="px-6 py-4 whitespace-nowrap">{c.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap">{c.description}</td>

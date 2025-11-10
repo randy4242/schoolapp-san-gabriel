@@ -52,12 +52,12 @@ const LapsoFormPage: React.FC = () => {
         
         try {
             if (isEditMode) {
-                // FIX: The `schoolID` property is not part of the `Lapso` type and should not be in the update payload.
-                // It is passed as a separate parameter to the `updateLapso` method.
-                await apiService.updateLapso(parseInt(id!), user.schoolId, {
+                const payload = {
                     ...data,
-                    lapsoID: parseInt(id!)
-                });
+                    lapsoID: parseInt(id!),
+                    schoolID: user.schoolId
+                };
+                await apiService.updateLapso(parseInt(id!), user.schoolId, payload);
             } else {
                 await apiService.createLapso({
                     ...data,
@@ -82,19 +82,19 @@ const LapsoFormPage: React.FC = () => {
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-text-primary">Nombre</label>
-                        <input {...register('nombre', { required: 'El nombre es requerido' })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
+                        <input {...register('nombre', { required: 'El nombre es requerido' })} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
                         {errors.nombre && <p className="text-danger text-xs mt-1">{errors.nombre.message}</p>}
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-text-primary">Fecha de Inicio</label>
-                        <input type="date" {...register('fechaInicio', { required: 'La fecha de inicio es requerida' })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
+                        <input type="date" {...register('fechaInicio', { required: 'La fecha de inicio es requerida' })} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
                         {errors.fechaInicio && <p className="text-danger text-xs mt-1">{errors.fechaInicio.message}</p>}
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-text-primary">Fecha de Fin</label>
-                        <input type="date" {...register('fechaFin', { required: 'La fecha de fin es requerida' })} className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
+                        <input type="date" {...register('fechaFin', { required: 'La fecha de fin es requerida' })} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
                         {errors.fechaFin && <p className="text-danger text-xs mt-1">{errors.fechaFin.message}</p>}
                     </div>
 

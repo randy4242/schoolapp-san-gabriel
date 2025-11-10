@@ -65,25 +65,25 @@ const AssignCoursePage: React.FC = () => {
     };
 
     return (
-        <div className="max-w-xl mx-auto bg-white p-8 rounded-lg shadow-md">
-            <h1 className="text-2xl font-bold text-gray-800 mb-4">Asignar Curso</h1>
+        <div className="max-w-xl mx-auto bg-surface p-8 rounded-lg shadow-md">
+            <h1 className="text-2xl font-bold text-text-primary mb-4">Asignar Curso</h1>
             {loading ? (
                 <p>Cargando...</p>
             ) : error ? (
-                <p className="text-red-500">{error}</p>
+                <p className="text-danger">{error}</p>
             ) : (
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    <div className="p-4 bg-gray-100 rounded-md">
-                        <p className="text-sm font-medium text-gray-600">Estudiante:</p>
-                        <p className="text-lg font-semibold text-main-blue">{student?.userName}</p>
+                    <div className="p-4 bg-background rounded-md border">
+                        <p className="text-sm font-medium text-text-secondary">Estudiante:</p>
+                        <p className="text-lg font-semibold text-primary">{student?.userName}</p>
                     </div>
 
                     <div>
-                        <label htmlFor="courseId" className="block text-sm font-medium text-gray-700">Curso a Inscribir</label>
+                        <label htmlFor="courseId" className="block text-sm font-medium text-text-primary">Curso a Inscribir</label>
                         <select
                             id="courseId"
                             {...register('courseId', { required: 'Debe seleccionar un curso', valueAsNumber: true })}
-                            className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
+                            className="mt-1 block w-full px-3 py-2 border border-border bg-surface rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
                         >
                             <option value="">Seleccione un curso disponible</option>
                             {availableCourses.length > 0 ? (
@@ -92,14 +92,14 @@ const AssignCoursePage: React.FC = () => {
                                 <option disabled>No hay más cursos disponibles para este estudiante</option>
                             )}
                         </select>
-                        {errors.courseId && <p className="text-red-500 text-xs mt-1">{errors.courseId.message}</p>}
+                        {errors.courseId && <p className="text-danger text-xs mt-1">{errors.courseId.message}</p>}
                     </div>
                     
                     <div className="flex justify-end space-x-4 pt-4">
-                        <Link to={`/enrollments/student/${userId}`} className="bg-gray-200 text-gray-800 py-2 px-4 rounded hover:bg-gray-300">
+                        <Link to={`/enrollments/student/${userId}`} className="bg-background text-text-primary py-2 px-4 rounded hover:bg-border">
                             Cancelar
                         </Link>
-                        <button type="submit" disabled={loading} className="bg-main-blue text-white py-2 px-4 rounded hover:bg-black disabled:bg-gray-400">
+                        <button type="submit" disabled={loading} className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-primary/90 disabled:bg-secondary">
                             {loading ? 'Asignando...' : 'Asignar Curso'}
                         </button>
                     </div>

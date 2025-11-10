@@ -8,7 +8,7 @@ import CertificateTemplate from '../certificates/CertificateTemplate';
 const ReportViewerPage: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    const { reportData, reportType, classroom } = location.state || {};
+    const { reportData, reportType, classroom, student } = location.state || {};
     const templateRef = React.useRef<HTMLDivElement>(null);
 
     if (!reportData || !reportType) {
@@ -63,7 +63,7 @@ const ReportViewerPage: React.FC = () => {
             </div>
 
             <div className="print-container bg-surface shadow-lg mx-auto" style={{ width: '210mm' }}>
-                {reportType === 'certificado' && <CertificadoTemplate data={reportData} templateRef={templateRef} />}
+                {reportType === 'certificado' && <CertificadoTemplate reportData={reportData} student={student} templateRef={templateRef} />}
                 {reportType === 'resumen' && <ResumenFinalEmgReport data={reportData} classroom={classroom} templateRef={templateRef} />}
                 {reportType === 'resumen_primaria' && <ResumenFinalPrimariaReport data={reportData} templateRef={templateRef} />}
                 {reportType === 'certificate' && <CertificateTemplate data={reportData} templateRef={templateRef} />}

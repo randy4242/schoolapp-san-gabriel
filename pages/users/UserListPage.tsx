@@ -3,10 +3,12 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
 import { User, ROLES } from '../../types';
-import { BellIcon, BlockIcon, BookOpenIcon, CreditCardIcon } from '../../components/icons';
+import { BellIcon, BlockIcon, BookOpenIcon, CreditCardIcon, FamilyIcon } from '../../components/icons';
 import TaughtCoursesModal from './TaughtCoursesModal';
 import ParentPaymentsModal from './ParentPaymentsModal';
 import ParentNotificationsModal from './ParentNotificationsModal';
+import UserRelationshipsModal from './UserRelationshipsModal';
+import UserDetailsModal from './UserDetailsModal';
 
 const UserListPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -18,6 +20,8 @@ const UserListPage: React.FC = () => {
   const [viewingCoursesFor, setViewingCoursesFor] = useState<User | null>(null);
   const [viewingPaymentsFor, setViewingPaymentsFor] = useState<User | null>(null);
   const [viewingNotificationsFor, setViewingNotificationsFor] = useState<User | null>(null);
+  const [viewingRelationshipsFor, setViewingRelationshipsFor] = useState<User | null>(null);
+  const [viewingDetailsFor, setViewingDetailsFor] = useState<User | null>(null);
 
   const { user, hasPermission } = useAuth();
   const location = useLocation();
@@ -84,6 +88,7 @@ const UserListPage: React.FC = () => {
 
   const isTeacherRole = (roleId: number) => [2, 6, 7, 8, 9, 10].includes(roleId);
   const isParentRole = (roleId: number) => [3, 11].includes(roleId);
+  const isStudentRole = (roleId: number) => roleId === 1;
 
   return (
     <div>
@@ -122,17 +127,17 @@ const UserListPage: React.FC = () => {
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-header">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Nombre</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Cédula</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Teléfono</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Rol</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Acciones</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Nombre</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Cédula</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Teléfono</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Rol</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Acciones</th>
               </tr>
             </thead>
             <tbody className="bg-surface divide-y divide-border">
               {filteredUsers.map((u) => (
-                <tr key={u.userID} className={`hover:bg-background ${u.isBlocked ? 'bg-danger-light' : ''}`}>
+                <tr key={u.userID} onDoubleClick={() => setViewingDetailsFor(u)} className={`hover:bg-background cursor-pointer ${u.isBlocked ? 'bg-danger-light' : ''}`}>
                   <td className="px-6 py-4 whitespace-nowrap">{u.userName}</td>
                   <td className="px-6 py-4 whitespace-nowrap">{u.email}</td>
                   <td className="px-6 py-4 whitespace-nowrap">{u.cedula}</td>
@@ -149,6 +154,11 @@ const UserListPage: React.FC = () => {
                         <button onClick={() => navigate(`/users/block/${u.userID}`)} className="text-secondary hover:text-primary flex items-center gap-1">
                             <BlockIcon /> {u.isBlocked ? 'Desbloquear' : 'Bloquear'}
                         </button>
+                        {(isParentRole(u.roleID) || isStudentRole(u.roleID)) && (
+                             <button onClick={() => setViewingRelationshipsFor(u)} className="text-info hover:text-info-dark flex items-center gap-1">
+                                <FamilyIcon /> Relaciones
+                            </button>
+                        )}
                         {isTeacherRole(u.roleID) && (
                             <button onClick={() => setViewingCoursesFor(u)} className="text-info hover:text-info-dark flex items-center gap-1">
                                 <BookOpenIcon /> Cursos
@@ -188,6 +198,18 @@ const UserListPage: React.FC = () => {
           <ParentNotificationsModal
               user={viewingNotificationsFor}
               onClose={() => setViewingNotificationsFor(null)}
+          />
+      )}
+      {viewingRelationshipsFor && (
+          <UserRelationshipsModal
+              user={viewingRelationshipsFor}
+              onClose={() => setViewingRelationshipsFor(null)}
+          />
+      )}
+      {viewingDetailsFor && (
+          <UserDetailsModal
+              user={viewingDetailsFor}
+              onClose={() => setViewingDetailsFor(null)}
           />
       )}
     </div>

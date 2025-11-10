@@ -110,7 +110,7 @@ const UserBlockPage: React.FC = () => {
                         <h3 className="text-lg font-semibold text-danger mb-3">Bloquear Usuario</h3>
                         <div>
                             <label htmlFor="reason" className="block text-sm font-medium text-text-primary">Motivo (opcional)</label>
-                            <input {...register('reason')} id="reason" className="mt-1 block w-full px-3 py-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-accent" maxLength={200} />
+                            <input {...register('reason')} id="reason" className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-accent" maxLength={200} />
                         </div>
                         <div className="flex items-center space-x-4 mt-4">
                             <button type="submit" disabled={loading} className="bg-danger text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 disabled:bg-secondary">

@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
-import { StudentGradeData, Evaluation } from '../../types';
+import { Evaluation, User, Grade } from '../../types';
 
 type FormValues = {
   grades: {
@@ -12,6 +12,7 @@ type FormValues = {
     gradeValue: string; // Use string for input flexibility
     gradeText: string;
     comments: string;
+    hasGrade: boolean;
   }[];
 };
 
@@ -24,8 +25,9 @@ const AssignGradesPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [saving, setSaving] = useState(false);
+    const [gradeMode, setGradeMode] = useState<'numeric' | 'text' | 'both'>('both');
 
-    const { control, handleSubmit, reset } = useForm<FormValues>({
+    const { control, handleSubmit } = useForm<FormValues>({
         defaultValues: {
             grades: []
         }
@@ -49,7 +51,44 @@ const AssignGradesPage: React.FC = () => {
                 ]);
 
                 setEvaluation(evalData);
+                
+                let classroomName = '';
 
+                // Use the classroomID directly from the evaluation data, which is most reliable.
+                if (evalData.classroomID) {
+                    try {
+                        const classroomData = await apiService.getClassroomById(evalData.classroomID, user.schoolId);
+                        classroomName = classroomData.name.toLowerCase();
+                    } catch (e) {
+                        console.warn("Could not fetch classroom name from evalData.classroomID", e);
+                    }
+                } else {
+                    // Fallback logic if classroomID is not on the evaluation for some reason
+                    if (studentData.length > 0) {
+                        try {
+                            const studentDetails = await apiService.getUserDetails(studentData[0].userID, user.schoolId);
+                            if (studentDetails.classroom) {
+                                classroomName = studentDetails.classroom.name.toLowerCase();
+                            }
+                        } catch(e) {
+                             console.warn("Could not determine classroom for evaluation from student, defaulting to both grade types.", e);
+                        }
+                    }
+                }
+                
+                // Set grade mode based on classroom name
+                if (classroomName.includes('año')) {
+                    setGradeMode('numeric');
+                } else if (classroomName.includes('grado')) {
+                    setGradeMode('text');
+                } else {
+                    setGradeMode('both');
+                }
+                
+                // Sort students alphabetically by name
+                studentData.sort((a, b) => a.userName.localeCompare(b.userName));
+
+                // The API is configured to return camelCase, create a map for efficient lookup.
                 const gradeMap = new Map(gradeData.map(g => [g.userID, g]));
 
                 const studentGradeData = studentData.map(student => {
@@ -60,6 +99,7 @@ const AssignGradesPage: React.FC = () => {
                         gradeValue: existingGrade?.gradeValue?.toString() ?? '',
                         gradeText: existingGrade?.gradeText ?? '',
                         comments: existingGrade?.comments ?? '',
+                        hasGrade: !!existingGrade,
                     };
                 });
                 
@@ -75,9 +115,24 @@ const AssignGradesPage: React.FC = () => {
         fetchData();
     }, [evaluationId, user, replace]);
 
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>, currentIndex: number, fieldName: 'gradeValue' | 'gradeText' | 'comments') => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            const nextIndex = currentIndex + 1;
+            if (nextIndex < fields.length) {
+                const nextFieldName = `grades.${nextIndex}.${fieldName}`;
+                const nextInput = document.getElementsByName(nextFieldName)[0] as HTMLInputElement;
+                if (nextInput) {
+                    nextInput.focus();
+                    nextInput.select();
+                }
+            }
+        }
+    };
+
     const onSubmit = async (data: FormValues) => {
-        if (!evaluationId || !user?.schoolId) {
-            setError('Error de configuración.');
+        if (!evaluationId || !user?.schoolId || !evaluation) {
+            setError('Error de configuración o evaluación no encontrada.');
             return;
         }
 
@@ -85,10 +140,12 @@ const AssignGradesPage: React.FC = () => {
         setError('');
 
         const promises = data.grades.map(grade => {
+            // Only send if there's something to save
             if (grade.gradeValue || grade.gradeText || grade.comments) {
                 return apiService.assignGrade({
                     userID: grade.userID,
                     evaluationID: parseInt(evaluationId),
+                    courseID: evaluation.courseID,
                     schoolID: user.schoolId,
                     gradeValue: grade.gradeValue ? parseFloat(grade.gradeValue) : null,
                     gradeText: grade.gradeText || null,
@@ -121,35 +178,45 @@ const AssignGradesPage: React.FC = () => {
                     <table className="min-w-full divide-y divide-border">
                         <thead className="bg-header">
                             <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Estudiante</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider w-32">Nota Num.</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider w-32">Nota Txt.</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Comentarios</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Estudiante</th>
+                                {(gradeMode === 'numeric' || gradeMode === 'both') && <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider w-32">Nota Num.</th>}
+                                {(gradeMode === 'text' || gradeMode === 'both') && <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider w-32">Nota Txt.</th>}
+                                <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Comentarios</th>
                             </tr>
                         </thead>
                         <tbody className="bg-surface divide-y divide-border">
                             {fields.map((field, index) => (
-                                <tr key={field.id}>
-                                    <td className="px-4 py-2 whitespace-nowrap font-medium">{field.userName}</td>
-                                    <td className="px-4 py-2">
-                                        <Controller
-                                            name={`grades.${index}.gradeValue`}
-                                            control={control}
-                                            render={({ field }) => <input type="number" step="0.01" {...field} className="w-full p-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-accent" />}
-                                        />
+                                <tr key={field.id} className={field.hasGrade ? 'bg-success-light/30' : ''}>
+                                    <td className="px-4 py-2 whitespace-nowrap font-medium">
+                                        {field.userName}
+                                        {field.hasGrade && <span className="ml-2 text-xs font-semibold bg-success text-text-on-primary px-2 py-0.5 rounded-full">Cargada</span>}
                                     </td>
-                                    <td className="px-4 py-2">
-                                         <Controller
-                                            name={`grades.${index}.gradeText`}
-                                            control={control}
-                                            render={({ field }) => <input {...field} className="w-full p-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-accent" />}
-                                        />
-                                    </td>
+                                    
+                                    {(gradeMode === 'numeric' || gradeMode === 'both') && (
+                                        <td className="px-4 py-2">
+                                            <Controller
+                                                name={`grades.${index}.gradeValue`}
+                                                control={control}
+                                                render={({ field }) => <input type="number" step="0.01" {...field} onKeyDown={(e) => handleKeyDown(e, index, 'gradeValue')} className="w-full p-2 bg-surface text-text-primary border border-border rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-accent" />}
+                                            />
+                                        </td>
+                                    )}
+
+                                    {(gradeMode === 'text' || gradeMode === 'both') && (
+                                        <td className="px-4 py-2">
+                                            <Controller
+                                                name={`grades.${index}.gradeText`}
+                                                control={control}
+                                                render={({ field }) => <input {...field} onKeyDown={(e) => handleKeyDown(e, index, 'gradeText')} className="w-full p-2 bg-surface text-text-primary border border-border rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-accent" />}
+                                            />
+                                        </td>
+                                    )}
+                                    
                                     <td className="px-4 py-2">
                                          <Controller
                                             name={`grades.${index}.comments`}
                                             control={control}
-                                            render={({ field }) => <input {...field} className="w-full p-2 bg-login-inputBg text-text-on-primary border border-login-inputBorder rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-accent" />}
+                                            render={({ field }) => <input {...field} onKeyDown={(e) => handleKeyDown(e, index, 'comments')} className="w-full p-2 bg-surface text-text-primary border border-border rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-accent" />}
                                         />
                                     </td>
                                 </tr>

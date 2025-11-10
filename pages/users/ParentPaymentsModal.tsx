@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
 import { Payment, PaymentMethod, PaymentStatus, User } from '../../types';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
@@ -20,6 +21,7 @@ const ParentPaymentsModal: React.FC<ParentPaymentsModalProps> = ({ user, onClose
     const [openCollapseId, setOpenCollapseId] = useState<number | null>(null);
     const { user: authUser } = useAuth();
     const { register, handleSubmit, reset } = useForm<ReviewFormInputs>();
+    const navigate = useNavigate();
 
     const fetchPayments = useCallback(async () => {
         if (authUser?.schoolId) {
@@ -44,11 +46,21 @@ const ParentPaymentsModal: React.FC<ParentPaymentsModalProps> = ({ user, onClose
         try {
             setError('');
             setSuccess('');
-            const apiAction = action === 'approve' ? apiService.approvePayment : apiService.rejectPayment;
-            await apiAction(paymentId, authUser.userId, data.comment);
-            setSuccess(`Pago ${action === 'approve' ? 'aprobado' : 'rechazado'} correctamente.`);
-            reset();
-            fetchPayments();
+            if (action === 'approve') {
+                const response = await apiService.approvePayment(paymentId, authUser.userId, data.comment);
+                setSuccess('Pago aprobado. Redirigiendo a la factura...');
+                reset();
+                if (response.invoiceId) {
+                    navigate(`/invoices/print/${response.invoiceId}`);
+                } else {
+                    fetchPayments(); // fallback to refresh
+                }
+            } else { // reject
+                await apiService.rejectPayment(paymentId, authUser.userId, data.comment);
+                setSuccess('Pago rechazado. Redirigiendo...');
+                reset();
+                navigate(`/users/block/${user.userID}`);
+            }
         } catch (err: any) {
             setError(err.message || `Error al ${action} el pago.`);
         }
@@ -80,18 +92,22 @@ const ParentPaymentsModal: React.FC<ParentPaymentsModalProps> = ({ user, onClose
                 </div>
             ) : <p className="text-secondary text-xs">Sin detalles específicos.</p>}
 
-            {p.status === PaymentStatus.Pending && (
+            {p.status === PaymentStatus.Pending ? (
                 <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <form onSubmit={handleSubmit((data) => handleReview(p.paymentID, 'approve', data))} className="space-y-2 p-3 border border-success rounded-md bg-success-light">
+                    <form onSubmit={handleSubmit((data) => handleReview(p.paymentID, 'approve', data))} className="space-y-2 p-3 border border-success rounded-md bg-success-light/20">
                         <h4 className="font-semibold text-success-text text-sm">Aprobar Pago</h4>
                         <input {...register('comment')} placeholder="Comentario (opcional)" className="w-full p-1 border rounded text-xs"/>
-                        <button type="submit" className="w-full bg-success text-on-primary text-sm py-1 px-2 rounded hover:bg-opacity-80">Aprobar</button>
+                        <button type="submit" className="w-full bg-success text-text-on-primary text-sm py-1 px-2 rounded hover:bg-opacity-80">Aprobar</button>
                     </form>
-                    <form onSubmit={handleSubmit((data) => handleReview(p.paymentID, 'reject', data))} className="space-y-2 p-3 border border-danger rounded-md bg-danger-light">
+                    <form onSubmit={handleSubmit((data) => handleReview(p.paymentID, 'reject', data))} className="space-y-2 p-3 border border-danger rounded-md bg-danger-light/20">
                         <h4 className="font-semibold text-danger-text text-sm">Rechazar Pago</h4>
                         <input {...register('comment')} placeholder="Motivo (opcional)" className="w-full p-1 border rounded text-xs"/>
-                        <button type="submit" className="w-full bg-danger text-on-primary text-sm py-1 px-2 rounded hover:bg-opacity-80">Rechazar</button>
+                        <button type="submit" className="w-full bg-danger text-text-on-primary text-sm py-1 px-2 rounded hover:bg-opacity-80">Rechazar</button>
                     </form>
+                </div>
+            ) : (
+                <div className="mt-4 pt-4 border-t">
+                    <p className="text-sm text-text-secondary">Este pago ya fue {p.status === PaymentStatus.Approved ? 'aprobado' : 'rechazado'}.</p>
                 </div>
             )}
         </div>
@@ -114,6 +130,7 @@ const ParentPaymentsModal: React.FC<ParentPaymentsModalProps> = ({ user, onClose
                                     <th className="px-4 py-2 text-left">Monto</th>
                                     <th className="px-4 py-2 text-left">Ref.</th>
                                     <th className="px-4 py-2 text-left">Estado</th>
+                                    <th className="px-4 py-2 text-left">Comentario</th>
                                     <th className="px-4 py-2 text-left"></th>
                                 </tr>
                             </thead>
@@ -125,14 +142,22 @@ const ParentPaymentsModal: React.FC<ParentPaymentsModalProps> = ({ user, onClose
                                         <td className="px-4 py-2">{p.amount.toFixed(2)} {p.currency}</td>
                                         <td className="px-4 py-2">{p.referenceNumber || '—'}</td>
                                         <td className="px-4 py-2">{getStatusBadge(p.status)}</td>
+                                        <td className="px-4 py-2">{p.notes || '—'}</td>
                                         <td className="px-4 py-2 text-right">
-                                            <button onClick={() => setOpenCollapseId(openCollapseId === p.paymentID ? null : p.paymentID)} className="text-info hover:underline text-xs">
-                                                {openCollapseId === p.paymentID ? 'Ocultar' : 'Detalles'}
-                                            </button>
+                                            <div className="flex items-center gap-2">
+                                                {p.status === PaymentStatus.Approved && p.invoiceID && (
+                                                    <button onClick={() => navigate(`/invoices/print/${p.invoiceID}`)} className="text-xs py-1 px-2 rounded bg-background text-primary border border-primary hover:bg-primary/10">
+                                                        Factura
+                                                    </button>
+                                                )}
+                                                <button onClick={() => setOpenCollapseId(openCollapseId === p.paymentID ? null : p.paymentID)} className="text-info hover:underline text-xs">
+                                                    {openCollapseId === p.paymentID ? 'Ocultar' : 'Detalles'}
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                     {openCollapseId === p.paymentID && (
-                                        <tr><td colSpan={5} className="p-0"><PaymentDetails p={p} /></td></tr>
+                                        <tr><td colSpan={6} className="p-0"><PaymentDetails p={p} /></td></tr>
                                     )}
                                     </React.Fragment>
                                 ))}

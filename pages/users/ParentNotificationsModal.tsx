@@ -18,8 +18,8 @@ const ParentNotificationsModal: React.FC<ParentNotificationsModalProps> = ({ use
     useEffect(() => {
         if (authUser?.schoolId) {
             setLoading(true);
-            // Assuming this endpoint exists, as per MVC logic
-            apiService.getParentNotifications(user.userID, authUser.schoolId)
+            // FIX: Replaced non-existent getParentNotifications with getUserNotifications. The original MVC controller logic was likely unified.
+            apiService.getUserNotifications(user.userID)
                 .then(data => {
                     setNotifications(data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
                 })

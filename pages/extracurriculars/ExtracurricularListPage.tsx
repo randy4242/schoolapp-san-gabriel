@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
 import { ExtracurricularActivity, Teacher } from '../../types';
+import ExtracurricularEnrollmentModal from './ExtracurricularEnrollmentModal';
 
 const dayOfWeekMap: { [key: number]: string } = {
     1: 'Lunes',
@@ -18,6 +19,8 @@ const ExtracurricularListPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const { user, hasPermission } = useAuth();
+    const [viewingEnrollmentsFor, setViewingEnrollmentsFor] = useState<ExtracurricularActivity | null>(null);
+
 
     const canCreate = useMemo(() => hasPermission([6]), [hasPermission]);
 
@@ -84,11 +87,11 @@ const ExtracurricularListPage: React.FC = () => {
                         <table className="min-w-full divide-y divide-border">
                             <thead className="bg-header">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Nombre</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Descripción</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Día</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Profesor</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Acciones</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Nombre</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Descripción</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Día</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Profesor</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-surface divide-y divide-border">
@@ -100,6 +103,7 @@ const ExtracurricularListPage: React.FC = () => {
                                         <td className="px-6 py-4 whitespace-nowrap text-secondary">{getTeacherName(activity.userID)}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                             <div className="flex items-center space-x-4">
+                                                <button onClick={() => setViewingEnrollmentsFor(activity)} className="text-info hover:text-info-dark">Inscripciones</button>
                                                 <Link to={`/extracurriculars/edit/${activity.activityID}`} className="text-warning hover:text-warning-dark">Editar</Link>
                                                 <button onClick={() => handleDelete(activity.activityID)} className="text-danger hover:text-danger-text">Eliminar</button>
                                             </div>
@@ -114,6 +118,13 @@ const ExtracurricularListPage: React.FC = () => {
                         <p className="text-secondary">No hay actividades extracurriculares registradas.</p>
                     </div>
                 )
+            )}
+
+            {viewingEnrollmentsFor && (
+                <ExtracurricularEnrollmentModal
+                    activity={viewingEnrollmentsFor}
+                    onClose={() => setViewingEnrollmentsFor(null)}
+                />
             )}
         </div>
     );

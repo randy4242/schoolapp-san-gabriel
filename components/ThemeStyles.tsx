@@ -7,7 +7,7 @@ const ThemeStyles: React.FC = () => {
     const flattenColors = (colors: any, prefix = 'color') => {
       Object.keys(colors).forEach(key => {
         const value = colors[key];
-        const newKey = key === 'DEFAULT' ? '' : `-${key.toLowerCase()}`;
+        const newKey = key === 'DEFAULT' ? '' : `-${key}`;
         const newPrefix = `${prefix}${newKey}`;
         if (typeof value === 'string') {
           variables += `--${newPrefix}: ${value};\n`;

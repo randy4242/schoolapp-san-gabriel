@@ -79,17 +79,17 @@ const CreateRelationshipPage: React.FC = () => {
     };
 
     return (
-        <div className="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
-            <h1 className="text-2xl font-bold text-gray-800 mb-6">Crear Relación Padre-Hijo</h1>
+        <div className="max-w-2xl mx-auto bg-surface p-8 rounded-lg shadow-md">
+            <h1 className="text-2xl font-bold text-text-primary mb-6">Crear Relación Padre-Hijo</h1>
 
-            {error && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{error}</div>}
-            {success && <div className="bg-green-100 text-green-700 p-3 rounded mb-4">{success}</div>}
+            {error && <div className="bg-danger-light text-danger-text p-3 rounded mb-4">{error}</div>}
+            {success && <div className="bg-success-light text-success-text p-3 rounded mb-4">{success}</div>}
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                 <div>
-                    <label htmlFor="parentSearch" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="parentSearch" className="block text-sm font-medium text-text-secondary mb-1">
                         Padre/Representante
-                        <span className="text-xs text-gray-500 ml-2">{filteredParents.length} / {parents.length}</span>
+                        <span className="text-xs text-text-tertiary ml-2">{filteredParents.length} / {parents.length}</span>
                     </label>
                     <input
                         id="parentSearch"
@@ -97,11 +97,11 @@ const CreateRelationshipPage: React.FC = () => {
                         placeholder="Buscar por nombre o cédula..."
                         value={parentSearch}
                         onChange={e => setParentSearch(e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-yellow/50 focus:border-brand-yellow mb-2"
+                        className="w-full p-2 bg-surface text-text-primary border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent mb-2"
                     />
                     <select
                         {...register('parentId', { required: 'Debe seleccionar un padre', valueAsNumber: true })}
-                        className="w-full p-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow/50 focus:border-brand-yellow"
+                        className="w-full p-2 border border-border rounded bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"
                     >
                         <option value="">Seleccione un padre</option>
                         {filteredParents.map(p => (
@@ -110,13 +110,13 @@ const CreateRelationshipPage: React.FC = () => {
                             </option>
                         ))}
                     </select>
-                    {errors.parentId && <p className="text-red-500 text-xs mt-1">{errors.parentId.message}</p>}
+                    {errors.parentId && <p className="text-danger text-xs mt-1">{errors.parentId.message}</p>}
                 </div>
 
                 <div>
-                    <label htmlFor="childSearch" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="childSearch" className="block text-sm font-medium text-text-secondary mb-1">
                         Hijo/Estudiante
-                        <span className="text-xs text-gray-500 ml-2">{filteredChildren.length} / {children.length}</span>
+                        <span className="text-xs text-text-tertiary ml-2">{filteredChildren.length} / {children.length}</span>
                     </label>
                     <input
                         id="childSearch"
@@ -124,11 +124,11 @@ const CreateRelationshipPage: React.FC = () => {
                         placeholder="Buscar por nombre o cédula..."
                         value={childSearch}
                         onChange={e => setChildSearch(e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-yellow/50 focus:border-brand-yellow mb-2"
+                        className="w-full p-2 bg-surface text-text-primary border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent mb-2"
                     />
                     <select
                         {...register('childId', { required: 'Debe seleccionar un hijo', valueAsNumber: true })}
-                        className="w-full p-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow/50 focus:border-brand-yellow"
+                        className="w-full p-2 border border-border rounded bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"
                     >
                         <option value="">Seleccione un estudiante</option>
                         {filteredChildren.map(c => (
@@ -137,14 +137,14 @@ const CreateRelationshipPage: React.FC = () => {
                             </option>
                         ))}
                     </select>
-                    {errors.childId && <p className="text-red-500 text-xs mt-1">{errors.childId.message}</p>}
+                    {errors.childId && <p className="text-danger text-xs mt-1">{errors.childId.message}</p>}
                 </div>
                 
                 <div className="flex justify-end space-x-4 pt-4">
-                    <Link to="/relationships" className="bg-gray-200 text-gray-800 py-2 px-4 rounded hover:bg-gray-300 transition-colors">
+                    <Link to="/relationships" className="bg-background text-text-primary py-2 px-4 rounded hover:bg-border transition-colors">
                         Cancelar
                     </Link>
-                    <button type="submit" disabled={loading} className="bg-main-blue text-white py-2 px-4 rounded hover:bg-black disabled:bg-gray-400 transition-colors">
+                    <button type="submit" disabled={loading} className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-primary/90 disabled:bg-secondary transition-colors">
                         {loading ? 'Creando...' : 'Crear Relación'}
                     </button>
                 </div>

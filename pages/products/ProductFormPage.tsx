@@ -36,21 +36,39 @@ const ProductFormPage: React.FC = () => {
     useEffect(() => {
         if (isEditMode && user?.schoolId) {
             setLoading(true);
-            apiService.getProductWithAudiences(parseInt(id!), user.schoolId)
-                .then(({ product, audiences }) => {
-                    setValue('sku', product.sku);
-                    setValue('name', product.name);
-                    setValue('description', product.description || '');
-                    setValue('costPrice', product.costPrice);
-                    setValue('salePrice', product.salePrice);
-                    setValue('isActive', product.isActive);
-                    // This requires a more complex mapping to get display names
-                    setAudiences(audiences.map(a => ({...a, display: `${a.targetType}:${a.targetID || 'All'}`})));
-                })
-                .catch(() => setError('No se pudo cargar el producto.'))
-                .finally(() => setLoading(false));
+            Promise.all([
+                apiService.getProductWithAudiences(parseInt(id!), user.schoolId),
+                apiService.getUsers(user.schoolId) // Fetch all users for name resolution
+            ]).then(([{ product, audiences }, allUsers]) => {
+                setValue('sku', product.sku);
+                setValue('name', product.name);
+                setValue('description', product.description || '');
+                setValue('costPrice', product.costPrice);
+                setValue('salePrice', product.salePrice);
+                setValue('isActive', product.isActive);
+                
+                const userMap = new Map(allUsers.map(u => [u.userID, u.userName]));
+                const roleMap = new Map(ROLES.map(r => [r.id, r.name]));
+
+                const audienceStates: AudienceState[] = audiences.map(a => {
+                    let display = `${a.targetType}:${a.targetID}`; // Fallback display
+                    if (a.targetType === 'All') {
+                        display = 'Todos';
+                    } else if (a.targetType === 'Role' && a.targetID) {
+                        display = roleMap.get(a.targetID) || `Rol #${a.targetID}`;
+                    } else if (a.targetType === 'User' && a.targetID) {
+                        display = userMap.get(a.targetID) || `Usuario #${a.targetID}`;
+                    }
+                    return { ...a, display };
+                });
+                setAudiences(audienceStates);
+
+            })
+            .catch(() => setError('No se pudo cargar el producto.'))
+            .finally(() => setLoading(false));
         }
     }, [id, isEditMode, setValue, user?.schoolId]);
+
 
     useEffect(() => {
         const json = JSON.stringify(audiences.map(({ targetType, targetID }) => ({ targetType, targetID })));
@@ -71,8 +89,8 @@ const ProductFormPage: React.FC = () => {
     };
 
     const handleUserSearch = async () => {
-        if (!userSearch.trim() || !user?.schoolId) return;
-        const result = await apiService.globalSearch(user.schoolId, userSearch);
+        if (!userSearch.trim() || !user?.schoolId || !user.userId) return;
+        const result = await apiService.globalSearch(user.schoolId, user.userId, userSearch);
         if (result.users.length > 0) {
             const u = result.users[0];
             addAudience({ targetType: 'User', targetID: u.userID, display: u.userName });
@@ -117,40 +135,46 @@ const ProductFormPage: React.FC = () => {
         }
     };
 
+    const inputStyle = "p-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent";
+    const btnBase = "py-2 px-4 rounded font-semibold transition-colors";
+    const btnPrimary = "bg-primary text-text-on-primary hover:bg-primary/90 disabled:bg-secondary";
+    const btnSecondary = "bg-secondary text-text-on-primary hover:bg-secondary/90";
+    const btnSmOutline = "py-1 px-2 text-sm rounded border";
+
     return (
-        <div className="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-md">
-            <h1 className="text-2xl font-bold text-gray-800 mb-6">{isEditMode ? 'Editar' : 'Crear'} Producto</h1>
-            {error && <p className="bg-red-100 text-red-700 p-3 rounded mb-4">{error}</p>}
+        <div className="max-w-3xl mx-auto bg-surface p-8 rounded-lg shadow-md">
+            <h1 className="text-2xl font-bold text-text-primary mb-6">{isEditMode ? 'Editar' : 'Crear'} Producto</h1>
+            {error && <p className="bg-danger-light text-danger-text p-3 rounded mb-4">{error}</p>}
             
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="md:col-span-1">
                         <label className="block text-sm font-medium">SKU</label>
-                        <input {...register('sku', { required: 'SKU es requerido' })} className="mt-1 w-full input-style" />
-                        {errors.sku && <p className="text-red-500 text-xs">{errors.sku.message}</p>}
+                        <input {...register('sku', { required: 'SKU es requerido' })} className={`mt-1 w-full ${inputStyle}`} />
+                        {errors.sku && <p className="text-danger text-xs">{errors.sku.message}</p>}
                     </div>
                     <div className="md:col-span-2">
                         <label className="block text-sm font-medium">Nombre</label>
-                        <input {...register('name', { required: 'Nombre es requerido' })} className="mt-1 w-full input-style" />
-                        {errors.name && <p className="text-red-500 text-xs">{errors.name.message}</p>}
+                        <input {...register('name', { required: 'Nombre es requerido' })} className={`mt-1 w-full ${inputStyle}`} />
+                        {errors.name && <p className="text-danger text-xs">{errors.name.message}</p>}
                     </div>
                 </div>
                 <div>
                     <label className="block text-sm font-medium">Descripción</label>
-                    <textarea {...register('description')} rows={3} className="mt-1 w-full input-style" />
+                    <textarea {...register('description')} rows={3} className={`mt-1 w-full ${inputStyle}`} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
                     <div>
                         <label className="block text-sm font-medium">Precio de Costo</label>
-                        <input type="number" step="0.01" {...register('costPrice', { valueAsNumber: true })} className="mt-1 w-full input-style" />
+                        <input type="number" step="0.01" {...register('costPrice', { valueAsNumber: true })} className={`mt-1 w-full ${inputStyle}`} />
                     </div>
                      <div>
                         <label className="block text-sm font-medium">Precio de Venta</label>
-                        <input type="number" step="0.01" {...register('salePrice', { required: 'Precio es requerido', valueAsNumber: true })} className="mt-1 w-full input-style" />
-                        {errors.salePrice && <p className="text-red-500 text-xs">{errors.salePrice.message}</p>}
+                        <input type="number" step="0.01" {...register('salePrice', { required: 'Precio es requerido', valueAsNumber: true })} className={`mt-1 w-full ${inputStyle}`} />
+                        {errors.salePrice && <p className="text-danger text-xs">{errors.salePrice.message}</p>}
                     </div>
                     <div className="flex items-center mt-6">
-                        <input type="checkbox" {...register('isActive')} id="isActive" className="h-4 w-4 rounded" />
+                        <input type="checkbox" {...register('isActive')} id="isActive" className="h-4 w-4 rounded border-border text-primary focus:ring-accent" />
                         <label htmlFor="isActive" className="ml-2 text-sm font-medium">Activo</label>
                     </div>
                 </div>
@@ -159,23 +183,23 @@ const ProductFormPage: React.FC = () => {
 
                 <h3 className="text-lg font-semibold">Audiencia</h3>
                 <div className="flex flex-wrap gap-2 mb-2">
-                    <button type="button" onClick={() => addAudience({ targetType: 'All', targetID: null, display: 'Todos' })} className="btn-sm btn-outline-secondary">Todos</button>
+                    <button type="button" onClick={() => addAudience({ targetType: 'All', targetID: null, display: 'Todos' })} className={`${btnSmOutline} border-secondary text-secondary hover:bg-secondary/10`}>Todos</button>
                     {ROLES.filter(r => [1,2,3,11].includes(r.id)).map(r => (
-                        <button key={r.id} type="button" onClick={() => addAudience({ targetType: 'Role', targetID: r.id, display: r.name })} className="btn-sm btn-outline-primary">{r.name}</button>
+                        <button key={r.id} type="button" onClick={() => addAudience({ targetType: 'Role', targetID: r.id, display: r.name })} className={`${btnSmOutline} border-primary text-primary hover:bg-primary/10`}>{r.name}</button>
                     ))}
                 </div>
                 <div className="flex gap-2">
-                    <input value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Buscar usuario..." className="flex-grow input-style" />
-                    <button type="button" onClick={handleUserSearch} className="btn btn-outline-info">Agregar</button>
+                    <input value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Buscar usuario..." className={`flex-grow ${inputStyle}`} />
+                    <button type="button" onClick={handleUserSearch} className={`${btnBase} ${btnSmOutline} border-info text-info hover:bg-info/10`}>Agregar</button>
                 </div>
 
-                <div className="border rounded p-2 min-h-[40px]">
+                <div className="border rounded p-2 min-h-[40px] bg-background">
                     {audiences.length === 0 
-                        ? <span className="text-sm text-gray-500">Sin selección. Por defecto será "Todos".</span>
+                        ? <span className="text-sm text-text-tertiary">Sin selección. Por defecto será "Todos".</span>
                         : audiences.map((a, i) => (
-                            <span key={i} className="inline-flex items-center bg-gray-200 text-gray-800 text-sm font-medium mr-2 mb-2 px-2.5 py-0.5 rounded">
+                            <span key={i} className="inline-flex items-center bg-background border text-text-secondary text-sm font-medium mr-2 mb-2 px-2.5 py-0.5 rounded">
                                 {a.display}
-                                <button type="button" onClick={() => removeAudience(i)} className="ml-2 text-red-500 hover:text-red-700">&times;</button>
+                                <button type="button" onClick={() => removeAudience(i)} className="ml-2 text-danger hover:text-danger-text">&times;</button>
                             </span>
                         ))
                     }
@@ -183,28 +207,12 @@ const ProductFormPage: React.FC = () => {
                 <input type="hidden" {...register('audiencesJson')} />
 
                 <div className="flex justify-end space-x-4 pt-4">
-                    <Link to="/products" className="btn btn-secondary">Cancelar</Link>
-                    <button type="submit" disabled={loading} className="btn btn-primary disabled:opacity-50">
+                    <Link to="/products" className={`${btnBase} bg-background text-text-primary hover:bg-border`}>Cancelar</Link>
+                    <button type="submit" disabled={loading} className={`${btnBase} ${btnPrimary}`}>
                         {loading ? 'Guardando...' : 'Guardar'}
                     </button>
                 </div>
             </form>
-            <style>{`
-                .input-style { 
-                  padding: 0.5rem 0.75rem; 
-                  border: 1px solid var(--color-login-inputBorder); 
-                  border-radius: 0.25rem; 
-                  background-color: var(--color-login-inputBg); 
-                  color: var(--color-text-onPrimary);
-                }
-                .btn { padding: 0.5rem 1rem; border-radius: 0.25rem; font-weight: 600; }
-                .btn-primary { background-color: #191815; color: white; }
-                .btn-secondary { background-color: #6c757d; color: white; }
-                .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
-                .btn-outline-secondary { border: 1px solid #6c757d; color: #6c757d; }
-                .btn-outline-primary { border: 1px solid #0d6efd; color: #0d6efd; }
-                .btn-outline-info { border: 1px solid #0dcaf0; color: #0dcaf0; }
-            `}</style>
         </div>
     );
 };

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { apiService } from '../../services/apiService';
-import { User, ReportData, Classroom, Lapso, ResumenFinalPrimariaReportData, ResumenFinalPrimariaStudent, ResumenFinalPrimariaResultado } from '../../types';
+import { User, Classroom, Lapso } from '../../types';
 
 const ReportPage: React.FC = () => {
     const { user } = useAuth();
@@ -52,47 +52,6 @@ const ReportPage: React.FC = () => {
         });
     };
 
-    const generateCertificadoMockData = (student: User): ReportData => {
-        const grades = [
-            { year: 1, area: 'Castellano', gradeNumber: '18', gradeLiteral: 'DIECIOCHO', type: 'T', date: 'Jul 2020', institution: '1' },
-            { year: 2, area: 'Castellano', gradeNumber: '17', gradeLiteral: 'DIECISIETE', type: 'T', date: 'Jul 2021', institution: '1' },
-            { year: 3, area: 'Física', gradeNumber: '19', gradeLiteral: 'DIECINUEVE', type: 'T', date: 'Jul 2022', institution: '1' },
-        ];
-        
-        const nameParts = student.userName.split(' ');
-        const lastName = nameParts.slice(0, 2).join(' ');
-        const firstName = nameParts.slice(2).join(' ');
-
-        return {
-            issuePlaceDate: `Carabobo, ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}`,
-            school: { code: 'S1934D0810', name: 'Colegio San Gabriel Arcángel', address: 'AV. SALVADOR FEO LA CRUZ SECTOR MAÑONGO', municipality: 'NAGUANAGUA', state: 'CARABOBO', phone: '0241-8426475', cdcee: 'CARABOBO' },
-            student: { cedula: student.cedula, lastName, firstName, birthDate: '07 DE SEPTIEMBRE DE 2013', birthPlace: 'País: VENEZUELA, Estado: CARABOBO, Municipio: VALENCIA' },
-            director: { name: 'MENDOZA CARRILLO, PEDRO ANGEL', cedula: 'V-11351158' },
-            grades,
-        };
-    };
-    
-    const generateResumenPrimariaMockData = (classroom: Classroom): ResumenFinalPrimariaReportData => {
-        const resultados: ResumenFinalPrimariaResultado[] = ['A', 'B', 'C', 'D', 'E', 'P'];
-        const studentList = students.filter(s => s.roleID === 1).slice(0, 20).map((s, i): ResumenFinalPrimariaStudent => ({
-            nro: i + 1,
-            cedula: s.cedula,
-            fullName: s.userName.toUpperCase(),
-            birthPlace: 'VALENCIA', ef: 'CA', sex: i % 2 === 0 ? 'M' : 'F',
-            birthDay: '15', birthMonth: '03', birthYear: '2015',
-            resultado: resultados[Math.floor(Math.random() * resultados.length)],
-        }));
-        const totals = studentList.reduce((acc, student) => { acc[student.resultado]++; return acc; }, { A: 0, B: 0, C: 0, D: 0, E: 0, P: 0 });
-        return {
-            schoolYear: '2023-2024', evaluationMonthYear: 'JULIO 2024', evaluationType: 'FINAL',
-            school: { code: 'S1934D0810', name: 'Colegio San Gabriel Arcángel', address: 'AV. SALVADOR FEO LA CRUZ SECTOR MAÑONGO', phone: '0241-8426475', municipality: 'NAGUANAGUA', state: 'CARABOBO', dtoEsc: '10', cdcee: 'CARABOBO' },
-            course: { grade: classroom.name.split(' ')[0] || '1ER GRADO', section: classroom.name.slice(-1) || 'A', studentsInSection: 25, studentsOnPage: studentList.length },
-            students: studentList, totals: totals, teacher: { fullName: 'GOMEZ, ISABEL', cedula: 'V-98765432' },
-            director: { name: 'MENDOZA CARRILLO, PEDRO ANGEL', cedula: 'V-11351158' },
-            observations: `1 Lugar de nacimiento: ${studentList[0]?.birthPlace || 'VALENCIA'}`
-        };
-    };
-
     const handleGenerateReport = async () => {
         setGenerating(true);
         setError('');
@@ -101,9 +60,9 @@ const ReportPage: React.FC = () => {
             if (reportType === 'certificado') {
                 if (!selectedStudent) throw new Error("Por favor, seleccione un estudiante.");
                 const student = students.find(s => s.userID === parseInt(selectedStudent, 10));
-                if (student) {
-                    const data = generateCertificadoMockData(student);
-                    navigate('/report-viewer', { state: { reportData: data, reportType: 'certificado' } });
+                if (student && user?.schoolId) {
+                    const data = await apiService.getEmgStudentReport(student.userID, user.schoolId, []);
+                    navigate('/report-viewer', { state: { reportData: data, reportType: 'certificado', student: student } });
                 }
             } else if (reportType === 'resumen') {
                 if (!selectedClassroom || selectedLapsos.size === 0) throw new Error("Por favor, seleccione un salón y al menos un lapso.");
@@ -115,8 +74,8 @@ const ReportPage: React.FC = () => {
             } else if (reportType === 'resumen_primaria') {
                 if (!selectedClassroom) throw new Error("Por favor, seleccione un salón.");
                 const classroom = classrooms.find(c => c.classroomID === parseInt(selectedClassroom, 10));
-                if (classroom) {
-                    const data = generateResumenPrimariaMockData(classroom);
+                if (classroom && user?.schoolId) {
+                     const data = await apiService.getRrdeaClassroomReport(classroom.classroomID, user.schoolId);
                     navigate('/report-viewer', { state: { reportData: data, reportType: 'resumen_primaria' } });
                 }
             }
