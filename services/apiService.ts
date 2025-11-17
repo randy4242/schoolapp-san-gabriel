@@ -1,6 +1,6 @@
 import { AuthenticatedUser, DashboardStats, User, Course, Teacher, Classroom, Student, ClassroomAttendanceStats, Lapso, StudentGradesVM, StudentAttendanceStats, LapsoGradeApiItem, StudentGradeItem, StudentGradesGroup, AuthResponse, Evaluation, Grade, Child, LoginHistoryRecord, Payment, Notification, ReportEmgClassroomResponse, ExtracurricularActivity, Certificate, CertificateGeneratePayload, Product, ProductWithAudiences, ProductAudience, AudiencePayload, Enrollment, ReportRrdeaClassroomResponse, Parent, UserDetails, AttendanceRecord, AttendanceEditPayload, ExtracurricularEnrollmentPayload, EnrolledStudent, ClassroomAverage, ClassroomStudentAveragesResponse, MedicalInfo, ApprovePaymentResponse, InvoicePrintVM, PendingInvoice, PaginatedInvoices, GenerateInvoicesRunDto, MonthlyGenerationResult, MonthlyARSummary, PaginatedPurchases, PurchaseCreatePayload, PurchaseDetail, PurchaseCreationResponse, PayrollRunPayload, PayrollPreviewResponse, PayrollRunResponse, PaginatedPayrolls, PayrollDetail, BaseSalaryUpdatePayload, Chat, Message, CreateGroupChatDto, SendMessageDto, PnlReportResponse, SalesByProductResponse, InventorySnapshotResponse, InventoryKardexResponse, ArAgingSummaryResponse, ArAgingByCustomerResponse, TrialBalanceRow, LedgerRow, IncomeStatement, BalanceSheet } from '../types';
 
-const BASE_URL = "https://apicamorucoSA.somee.com/";
+const BASE_URL = "https://siscamoruco.somee.com/";
 
 
 export interface GlobalSearchResult {
