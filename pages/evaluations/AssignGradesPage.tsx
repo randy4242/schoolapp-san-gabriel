@@ -1,20 +1,64 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { useForm, useFieldArray, Controller, SubmitHandler } from 'react-hook-form';
+import { Type } from "@google/genai";
+import * as XLSX from 'xlsx';
 import { apiService } from '../../services/apiService';
+import { geminiClient } from '../../services/geminiService';
 import { useAuth } from '../../hooks/useAuth';
 import { Evaluation, User, Grade } from '../../types';
+import Modal from '../../components/Modal';
+import { CameraIcon, EyeIcon, SpinnerIcon, ClipboardCheckIcon, XIcon } from '../../components/icons';
+
+// --- Helper Components & Functions ---
+
+const ImagePreviewModal: React.FC<{
+    imageUrl: string;
+    studentName: string;
+    onClose: () => void;
+}> = ({ imageUrl, studentName, onClose }) => {
+    
+    useEffect(() => {
+        return () => {
+            if (imageUrl.startsWith('blob:')) {
+                URL.revokeObjectURL(imageUrl);
+            }
+        }
+    }, [imageUrl]);
+    
+    return (
+        <Modal isOpen={true} onClose={onClose} title={`Imagen de Evaluación - ${studentName}`}>
+            <img src={imageUrl} alt={`Evidencia para ${studentName}`} className="max-w-full max-h-[70vh] mx-auto" />
+            <div className="flex justify-end pt-4 mt-4 border-t">
+                <button type="button" onClick={onClose} className="bg-background text-text-primary py-2 px-4 rounded hover:bg-border transition-colors">
+                    Cerrar
+                </button>
+            </div>
+        </Modal>
+    );
+};
+
 
 type FormValues = {
   grades: {
+    gradeID: number | null;
     userID: number;
     userName: string;
-    gradeValue: string; // Use string for input flexibility
+    gradeValue: string;
     gradeText: string;
     comments: string;
     hasGrade: boolean;
+    hasImage: boolean;
   }[];
 };
+
+interface PotentialMatch {
+    extractedName: string;
+    targetIndex: number;
+    targetName: string;
+    gradeValue: number | null;
+    gradeText: string | null;
+}
 
 const AssignGradesPage: React.FC = () => {
     const { evaluationId } = useParams<{ evaluationId: string }>();
@@ -26,8 +70,21 @@ const AssignGradesPage: React.FC = () => {
     const [error, setError] = useState('');
     const [saving, setSaving] = useState(false);
     const [gradeMode, setGradeMode] = useState<'numeric' | 'text' | 'both'>('both');
+    const [viewingImage, setViewingImage] = useState<{ imageUrl: string; studentName: string } | null>(null);
+    const [isUploading, setIsUploading] = useState<number | null>(null);
 
-    const { control, handleSubmit } = useForm<FormValues>({
+    // AI Import States
+    const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+    const [aiAnalyzing, setAiAnalyzing] = useState(false);
+    const [aiError, setAiError] = useState('');
+    
+    // New AI States for UI feedback
+    const [aiWarnings, setAiWarnings] = useState<string[]>([]);
+    const [potentialMatches, setPotentialMatches] = useState<PotentialMatch[]>([]);
+    
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const { control, handleSubmit, setValue, getValues } = useForm<FormValues>({
         defaultValues: {
             grades: []
         }
@@ -53,53 +110,31 @@ const AssignGradesPage: React.FC = () => {
                 setEvaluation(evalData);
                 
                 let classroomName = '';
-
-                // Use the classroomID directly from the evaluation data, which is most reliable.
                 if (evalData.classroomID) {
                     try {
                         const classroomData = await apiService.getClassroomById(evalData.classroomID, user.schoolId);
                         classroomName = classroomData.name.toLowerCase();
-                    } catch (e) {
-                        console.warn("Could not fetch classroom name from evalData.classroomID", e);
-                    }
-                } else {
-                    // Fallback logic if classroomID is not on the evaluation for some reason
-                    if (studentData.length > 0) {
-                        try {
-                            const studentDetails = await apiService.getUserDetails(studentData[0].userID, user.schoolId);
-                            if (studentDetails.classroom) {
-                                classroomName = studentDetails.classroom.name.toLowerCase();
-                            }
-                        } catch(e) {
-                             console.warn("Could not determine classroom for evaluation from student, defaulting to both grade types.", e);
-                        }
-                    }
+                    } catch (e) { console.warn("Could not fetch classroom name", e); }
                 }
                 
-                // Set grade mode based on classroom name
-                if (classroomName.includes('año')) {
-                    setGradeMode('numeric');
-                } else if (classroomName.includes('grado')) {
-                    setGradeMode('text');
-                } else {
-                    setGradeMode('both');
-                }
+                if (classroomName.includes('año')) setGradeMode('numeric');
+                else if (classroomName.includes('grado')) setGradeMode('text');
+                else setGradeMode('both');
                 
-                // Sort students alphabetically by name
                 studentData.sort((a, b) => a.userName.localeCompare(b.userName));
-
-                // The API is configured to return camelCase, create a map for efficient lookup.
                 const gradeMap = new Map(gradeData.map(g => [g.userID, g]));
 
                 const studentGradeData = studentData.map(student => {
                     const existingGrade = gradeMap.get(student.userID);
                     return {
+                        gradeID: existingGrade?.gradeID ?? null,
                         userID: student.userID,
                         userName: student.userName,
                         gradeValue: existingGrade?.gradeValue?.toString() ?? '',
                         gradeText: existingGrade?.gradeText ?? '',
                         comments: existingGrade?.comments ?? '',
                         hasGrade: !!existingGrade,
+                        hasImage: existingGrade?.hasImage ?? false,
                     };
                 });
                 
@@ -114,25 +149,278 @@ const AssignGradesPage: React.FC = () => {
         };
         fetchData();
     }, [evaluationId, user, replace]);
+    
+    // --- AI Logic ---
 
-    const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>, currentIndex: number, fieldName: 'gradeValue' | 'gradeText' | 'comments') => {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            const nextIndex = currentIndex + 1;
-            if (nextIndex < fields.length) {
-                const nextFieldName = `grades.${nextIndex}.${fieldName}`;
-                const nextInput = document.getElementsByName(nextFieldName)[0] as HTMLInputElement;
-                if (nextInput) {
-                    nextInput.focus();
-                    nextInput.select();
+    const fileToGenerativePart = async (file: File) => {
+        const base64EncodedDataPromise = new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+            reader.readAsDataURL(file);
+        });
+
+        return {
+            inlineData: {
+                data: await base64EncodedDataPromise,
+                mimeType: file.type,
+            },
+        };
+    };
+
+    const readExcelFile = async (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = e.target?.result;
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const csv = XLSX.utils.sheet_to_csv(worksheet);
+                    resolve(csv);
+                } catch (err) {
+                    reject(err);
                 }
+            };
+            reader.onerror = (error) => reject(error);
+            reader.readAsArrayBuffer(file);
+        });
+    };
+
+    const handleAiFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setAiAnalyzing(true);
+        setAiError('');
+        setAiWarnings([]);
+        setPotentialMatches([]);
+
+        try {
+            const modelId = 'gemini-2.5-flash';
+
+            let contentPart: any;
+            let promptText = "";
+            
+            const isSpreadsheet = file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv');
+
+            if (isSpreadsheet) {
+                 const csvData = await readExcelFile(file);
+                 contentPart = { text: `Datos extraídos del archivo:\n${csvData}` };
+                 promptText = `Analiza los datos de texto y extrae las calificaciones.`;
+            } else {
+                 // PDF or Image
+                 contentPart = await fileToGenerativePart(file);
+                 promptText = `Analiza este documento visualmente y extrae las calificaciones de los estudiantes.`;
+            }
+
+            const prompt = `
+                ${promptText}
+                Contexto: Estás extrayendo notas para una evaluación escolar.
+                
+                Extrae una lista de estudiantes con sus notas. Devuelve un JSON ARRAY.
+                
+                Campos por objeto:
+                - studentName: Nombre completo del estudiante (string).
+                - gradeValue: Nota numérica (number). Si no hay, null.
+                - gradeText: Nota literal (string, ejemplo: A, B, C). Si no hay, null.
+
+                Instrucciones:
+                1. Si la nota es solo texto (A, B, C...), ponla en gradeText.
+                2. Si la nota es un número (0-20), ponla en gradeValue.
+                3. NO INVENTES DATOS.
+            `;
+
+            const response = await geminiClient.models.generateContent({
+                model: modelId,
+                contents: [
+                    { text: prompt },
+                    contentPart
+                ],
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                studentName: { type: Type.STRING },
+                                gradeValue: { type: Type.NUMBER },
+                                gradeText: { type: Type.STRING }
+                            }
+                        }
+                    }
+                }
+            });
+
+            const jsonText = response.text;
+            if (!jsonText) throw new Error("No se obtuvo respuesta de la IA.");
+            
+            const extractedData: { studentName: string, gradeValue: number | null, gradeText: string | null }[] = JSON.parse(jsonText);
+            
+            // --- Advanced Matching Logic ---
+            // Tokenize: split string into words, remove accents, lowercase
+            const tokenize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(w => w.length > 1); // Filter single chars to avoid noise
+            
+            const currentFields = getValues('grades');
+            const notFoundNames: string[] = [];
+            const matchesToConfirm: PotentialMatch[] = [];
+
+            extractedData.forEach(extracted => {
+                const extractedTokens = tokenize(extracted.studentName);
+                
+                let bestMatchIndex = -1;
+                let maxScore = 0;
+
+                currentFields.forEach((field, index) => {
+                    const fieldTokens = tokenize(field.userName);
+                    
+                    // Calculate intersection count
+                    const intersection = extractedTokens.filter(token => fieldTokens.includes(token));
+                    const score = intersection.length / Math.max(extractedTokens.length, 1); // Percentage of extracted words found in DB name
+
+                    if (score > maxScore) {
+                        maxScore = score;
+                        bestMatchIndex = index;
+                    }
+                });
+
+                const roundedGradeValue = extracted.gradeValue !== null ? Math.round(extracted.gradeValue) : null;
+
+                // Thresholds logic
+                if (maxScore === 1 && bestMatchIndex !== -1) {
+                    // Perfect match (all words in extracted name appear in DB name)
+                    // Auto-apply
+                    if (roundedGradeValue !== null) setValue(`grades.${bestMatchIndex}.gradeValue`, String(roundedGradeValue));
+                    if (extracted.gradeText !== null) setValue(`grades.${bestMatchIndex}.gradeText`, extracted.gradeText);
+                    // Reset comments to empty string
+                    setValue(`grades.${bestMatchIndex}.comments`, "");
+                } else if (maxScore >= 0.5 && bestMatchIndex !== -1) {
+                    // Partial match (some words match, likely correct but needs confirmation)
+                    matchesToConfirm.push({
+                        extractedName: extracted.studentName,
+                        targetIndex: bestMatchIndex,
+                        targetName: currentFields[bestMatchIndex].userName,
+                        gradeValue: roundedGradeValue,
+                        gradeText: extracted.gradeText
+                    });
+                } else {
+                    // No reliable match
+                    notFoundNames.push(extracted.studentName);
+                }
+            });
+
+            setPotentialMatches(matchesToConfirm);
+            setAiWarnings(notFoundNames);
+            setIsAiModalOpen(false); // Close modal to show results on page
+
+        } catch (err: any) {
+            console.error("AI Error:", err);
+            setAiError("Error al analizar el documento. Asegúrate de que sea legible.");
+        } finally {
+            setAiAnalyzing(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    const confirmMatch = (match: PotentialMatch, idxInState: number) => {
+        // Apply the grade
+        if (match.gradeValue !== null) setValue(`grades.${match.targetIndex}.gradeValue`, String(match.gradeValue));
+        if (match.gradeText !== null) setValue(`grades.${match.targetIndex}.gradeText`, match.gradeText);
+        setValue(`grades.${match.targetIndex}.comments`, ""); // Reset comments
+
+        // Remove from potential matches
+        setPotentialMatches(prev => prev.filter((_, i) => i !== idxInState));
+    };
+
+    const discardMatch = (idxInState: number) => {
+        setPotentialMatches(prev => prev.filter((_, i) => i !== idxInState));
+    };
+
+    const discardAllMatches = () => {
+        setPotentialMatches([]);
+    };
+
+    const clearWarnings = () => {
+        setAiWarnings([]);
+    };
+
+    // --- Standard Handlers ---
+
+    const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>, index: number) => {
+        const file = event.target.files?.[0];
+        const grade = fields[index];
+        if (!file || !user || !evaluationId || !evaluation) return;
+    
+        setIsUploading(grade.userID);
+        setError('');
+        
+        try {
+            let gradeIdToUse = grade.gradeID;
+    
+            if (!gradeIdToUse) {
+                const currentGradeData = getValues(`grades.${index}`);
+                
+                await apiService.assignGrade({
+                    userID: currentGradeData.userID,
+                    evaluationID: parseInt(evaluationId),
+                    courseID: evaluation.courseID,
+                    schoolID: user.schoolId,
+                    gradeValue: currentGradeData.gradeValue ? parseFloat(currentGradeData.gradeValue) : null,
+                    gradeText: currentGradeData.gradeText || null,
+                    comments: currentGradeData.comments || null,
+                });
+                
+                const updatedGrades = await apiService.getGradesForEvaluation(parseInt(evaluationId), user.schoolId);
+                const newGrade = updatedGrades.find(g => g.userID === grade.userID);
+    
+                if (newGrade && newGrade.gradeID) {
+                    gradeIdToUse = newGrade.gradeID;
+                    setValue(`grades.${index}.gradeID`, newGrade.gradeID);
+                    setValue(`grades.${index}.hasGrade`, true);
+                } else {
+                    throw new Error("No se pudo guardar la nota para obtener un ID.");
+                }
+            }
+            
+            await apiService.uploadGradeImageFile(gradeIdToUse, file);
+            setValue(`grades.${index}.hasImage`, true);
+    
+        } catch (err: any) {
+            setError(err.message || "Error al subir la imagen.");
+        } finally {
+            setIsUploading(null);
+            if (event.target) event.target.value = '';
+        }
+    };
+    
+    const handleViewImage = async (index: number) => {
+        const grade = fields[index];
+        if (grade.gradeID) {
+            setIsUploading(grade.userID);
+            try {
+                const imageUrl = `${apiService.getBaseUrl()}api/grades/${grade.gradeID}/image/file`;
+                const response = await fetch(imageUrl, { headers: apiService.getAuthHeaders() });
+                if (!response.ok) throw new Error("Imagen no encontrada.");
+                
+                const blob = await response.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                setViewingImage({
+                    imageUrl: objectUrl,
+                    studentName: grade.userName
+                });
+            } catch (e: any) {
+                setError(e.message || "No se pudo cargar la imagen.");
+            } finally {
+                 setIsUploading(null);
             }
         }
     };
 
-    const onSubmit = async (data: FormValues) => {
+
+    const onSubmit: SubmitHandler<FormValues> = async (data) => {
         if (!evaluationId || !user?.schoolId || !evaluation) {
-            setError('Error de configuración o evaluación no encontrada.');
+            setError('Error de configuración.');
             return;
         }
 
@@ -140,7 +428,6 @@ const AssignGradesPage: React.FC = () => {
         setError('');
 
         const promises = data.grades.map(grade => {
-            // Only send if there's something to save
             if (grade.gradeValue || grade.gradeText || grade.comments) {
                 return apiService.assignGrade({
                     userID: grade.userID,
@@ -149,7 +436,7 @@ const AssignGradesPage: React.FC = () => {
                     schoolID: user.schoolId,
                     gradeValue: grade.gradeValue ? parseFloat(grade.gradeValue) : null,
                     gradeText: grade.gradeText || null,
-                    comments: grade.comments || null
+                    comments: grade.comments || null,
                 });
             }
             return Promise.resolve();
@@ -164,24 +451,98 @@ const AssignGradesPage: React.FC = () => {
             setSaving(false);
         }
     };
-
+    
     if (loading) return <p>Cargando estudiantes y notas...</p>;
-    if (error) return <p className="text-danger">{error}</p>;
+    if (error && !saving) return <p className="text-danger bg-danger-light p-2 rounded">{error}</p>;
 
     return (
         <div className="bg-surface p-8 rounded-lg shadow-md">
-            <h1 className="text-2xl font-bold text-text-primary mb-2">Asignar Notas</h1>
-            <h2 className="text-lg text-secondary mb-6">Evaluación: <span className="font-semibold text-info-dark">{evaluation?.title}</span></h2>
+            {viewingImage && (
+                <ImagePreviewModal
+                    imageUrl={viewingImage.imageUrl}
+                    studentName={viewingImage.studentName}
+                    onClose={() => setViewingImage(null)}
+                />
+            )}
+            
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h1 className="text-2xl font-bold text-text-primary mb-1">Asignar Notas</h1>
+                    <h2 className="text-lg text-secondary">
+                        Evaluación: <span className="font-semibold text-info-dark">{evaluation?.title}</span>
+                    </h2>
+                </div>
+                <button 
+                    type="button"
+                    onClick={() => setIsAiModalOpen(true)}
+                    className="bg-accent text-text-on-accent px-4 py-2 rounded-md hover:bg-accent/90 flex items-center gap-2 font-semibold shadow-sm"
+                >
+                    <ClipboardCheckIcon /> Importar Notas con IA
+                </button>
+            </div>
+
+            {/* AI Feedback Sections */}
+            {aiWarnings.length > 0 && (
+                <div className="mb-6 border-l-4 border-danger bg-danger-light/20 p-4 rounded shadow-sm relative">
+                    <button onClick={clearWarnings} className="absolute top-2 right-2 text-danger hover:text-danger-dark"><XIcon className="w-4 h-4"/></button>
+                    <h3 className="font-bold text-danger text-lg mb-2">Advertencia: Estudiantes no encontrados</h3>
+                    <p className="text-sm text-text-secondary mb-2">Los siguientes nombres en el archivo no tuvieron coincidencia exacta con la lista de evaluación:</p>
+                    <ul className="list-disc list-inside text-sm text-text-primary grid grid-cols-1 md:grid-cols-2 gap-1">
+                        {aiWarnings.map((name, i) => <li key={i} className="truncate">{name}</li>)}
+                    </ul>
+                </div>
+            )}
+
+            {potentialMatches.length > 0 && (
+                <div className="mb-6 border-l-4 border-warning bg-warning/10 p-4 rounded shadow-sm">
+                    <div className="flex justify-between items-center mb-2">
+                        <h3 className="font-bold text-warning-dark text-lg">Coincidencias Encontradas ({potentialMatches.length})</h3>
+                        <button onClick={discardAllMatches} className="text-xs text-text-secondary hover:text-danger underline">Descartar todo</button>
+                    </div>
+                    <p className="text-sm text-text-secondary mb-3">La IA encontró coincidencias parciales. Confirme si desea asignar la nota.</p>
+                    <div className="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto">
+                        {potentialMatches.map((match, i) => (
+                            <div key={i} className="flex items-center justify-between bg-surface p-3 rounded border border-border shadow-sm">
+                                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <span className="text-xs text-text-tertiary block">En Archivo:</span>
+                                        <span className="font-medium text-text-primary">{match.extractedName}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-text-tertiary block">En Lista (Sistema):</span>
+                                        <span className="font-bold text-primary">{match.targetName}</span>
+                                    </div>
+                                </div>
+                                <div className="mx-4 text-center min-w-[80px]">
+                                    <span className="block text-xs text-text-tertiary">Nota</span>
+                                    <span className="font-bold text-lg">
+                                        {match.gradeValue !== null ? match.gradeValue : (match.gradeText || '-')}
+                                    </span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => confirmMatch(match, i)} className="bg-success text-white p-1.5 rounded hover:bg-success-dark" title="Aceptar">
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                                    </button>
+                                    <button onClick={() => discardMatch(i)} className="bg-background border border-border text-text-secondary p-1.5 rounded hover:bg-danger-light hover:text-danger" title="Descartar">
+                                        <XIcon className="w-5 h-5"/>
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
             
             <form onSubmit={handleSubmit(onSubmit)}>
                 <div className="overflow-x-auto border border-border rounded-lg">
                     <table className="min-w-full divide-y divide-border">
                         <thead className="bg-header">
                             <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Estudiante</th>
-                                {(gradeMode === 'numeric' || gradeMode === 'both') && <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider w-32">Nota Num.</th>}
-                                {(gradeMode === 'text' || gradeMode === 'both') && <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider w-32">Nota Txt.</th>}
-                                <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Comentarios</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Estudiante</th>
+                                {(gradeMode === 'numeric' || gradeMode === 'both') && <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase w-32">Nota Num.</th>}
+                                {(gradeMode === 'text' || gradeMode === 'both') && <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase w-32">Nota Txt.</th>}
+                                <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Comentarios</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase w-24">Imagen</th>
                             </tr>
                         </thead>
                         <tbody className="bg-surface divide-y divide-border">
@@ -191,33 +552,32 @@ const AssignGradesPage: React.FC = () => {
                                         {field.userName}
                                         {field.hasGrade && <span className="ml-2 text-xs font-semibold bg-success text-text-on-primary px-2 py-0.5 rounded-full">Cargada</span>}
                                     </td>
-                                    
                                     {(gradeMode === 'numeric' || gradeMode === 'both') && (
-                                        <td className="px-4 py-2">
-                                            <Controller
-                                                name={`grades.${index}.gradeValue`}
-                                                control={control}
-                                                render={({ field }) => <input type="number" step="0.01" {...field} onKeyDown={(e) => handleKeyDown(e, index, 'gradeValue')} className="w-full p-2 bg-surface text-text-primary border border-border rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-accent" />}
-                                            />
-                                        </td>
+                                        <td className="px-4 py-2"><Controller name={`grades.${index}.gradeValue`} control={control} render={({ field }) => <input type="number" step="1" {...field} className="w-full p-2 bg-surface text-text-primary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-accent" />} /></td>
                                     )}
-
                                     {(gradeMode === 'text' || gradeMode === 'both') && (
-                                        <td className="px-4 py-2">
-                                            <Controller
-                                                name={`grades.${index}.gradeText`}
-                                                control={control}
-                                                render={({ field }) => <input {...field} onKeyDown={(e) => handleKeyDown(e, index, 'gradeText')} className="w-full p-2 bg-surface text-text-primary border border-border rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-accent" />}
-                                            />
-                                        </td>
+                                        <td className="px-4 py-2"><Controller name={`grades.${index}.gradeText`} control={control} render={({ field }) => <input {...field} className="w-full p-2 bg-surface text-text-primary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-accent" />} /></td>
                                     )}
-                                    
+                                    <td className="px-4 py-2"><Controller name={`grades.${index}.comments`} control={control} render={({ field }) => <input {...field} className="w-full p-2 bg-surface text-text-primary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-accent" />} /></td>
                                     <td className="px-4 py-2">
-                                         <Controller
-                                            name={`grades.${index}.comments`}
-                                            control={control}
-                                            render={({ field }) => <input {...field} onKeyDown={(e) => handleKeyDown(e, index, 'comments')} className="w-full p-2 bg-surface text-text-primary border border-border rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-accent" />}
-                                        />
+                                        <div className="flex items-center space-x-2 h-10">
+                                            {isUploading === field.userID ? (
+                                                <SpinnerIcon className="text-primary" />
+                                            ) : (
+                                                <>
+                                                    {field.hasImage && (
+                                                        <button type="button" onClick={() => handleViewImage(index)} className="cursor-pointer text-info hover:text-info-dark p-2 rounded-full hover:bg-background" title="Ver imagen">
+                                                            <EyeIcon />
+                                                        </button>
+                                                    )}
+                                                    
+                                                    <input type="file" accept="image/*" id={`image-upload-${index}`} className="hidden" onChange={(e) => handleImageUpload(e, index)} />
+                                                    <label htmlFor={`image-upload-${index}`} className="cursor-pointer text-secondary hover:text-primary p-2 rounded-full hover:bg-background" title={field.hasImage ? "Reemplazar imagen" : "Subir imagen"}>
+                                                        <CameraIcon />
+                                                    </label>
+                                                </>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -232,6 +592,54 @@ const AssignGradesPage: React.FC = () => {
                     </button>
                 </div>
             </form>
+
+            {isAiModalOpen && (
+                <Modal isOpen={true} onClose={() => setIsAiModalOpen(false)} title="Importar Notas con IA">
+                    <div className="p-4">
+                        <p className="text-text-secondary mb-4 text-sm">
+                            Sube una foto, PDF o archivo Excel con la lista de estudiantes y sus notas. La IA intentará hacer coincidir los nombres y rellenar los campos automáticamente.
+                        </p>
+
+                        {aiError && <p className="bg-danger-light text-danger p-2 rounded mb-4 text-sm">{aiError}</p>}
+                        
+                        <div 
+                            className={`border-2 border-dashed rounded-lg p-8 transition-colors text-center ${aiAnalyzing ? 'border-gray-300 bg-gray-50 cursor-wait' : 'border-primary/50 hover:bg-background cursor-pointer'}`}
+                            onClick={() => !aiAnalyzing && fileInputRef.current?.click()}
+                        >
+                            <input 
+                                type="file" 
+                                ref={fileInputRef} 
+                                className="hidden" 
+                                accept="image/*,application/pdf,.xlsx,.xls,.csv"
+                                onChange={handleAiFileChange}
+                                disabled={aiAnalyzing}
+                            />
+                            
+                            {aiAnalyzing ? (
+                                <div className="flex flex-col items-center justify-center text-primary">
+                                    <SpinnerIcon className="w-10 h-10 mb-2" />
+                                    <span className="font-bold">Analizando documento...</span>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center text-text-tertiary hover:text-primary">
+                                    <span className="text-4xl mb-2">📂</span>
+                                    <span>Haz clic para subir archivo</span>
+                                    <span className="text-xs mt-1">(Excel, PDF, Imagen)</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-6 flex justify-end">
+                            <button 
+                                onClick={() => setIsAiModalOpen(false)}
+                                className="bg-background text-text-primary py-2 px-4 rounded hover:bg-border"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 };

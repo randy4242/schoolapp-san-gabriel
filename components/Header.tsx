@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -34,6 +35,8 @@ const Header: React.FC<{ toggleSidebar: () => void }> = ({ toggleSidebar }) => {
     const navigate = useNavigate();
     const searchRef = useRef<HTMLDivElement>(null);
 
+    const isParent = user?.roleId === 3;
+
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
     const searchableNavLinks = useMemo(() => [
@@ -66,7 +69,7 @@ const Header: React.FC<{ toggleSidebar: () => void }> = ({ toggleSidebar }) => {
     }, []);
 
     useEffect(() => {
-        if (debouncedSearchTerm && user?.schoolId && user.userId) {
+        if (debouncedSearchTerm && user?.schoolId && user.userId && !isParent) {
             setLoading(true);
             setDropdownVisible(true);
             apiService.globalSearch(user.schoolId, user.userId, debouncedSearchTerm)
@@ -88,7 +91,7 @@ const Header: React.FC<{ toggleSidebar: () => void }> = ({ toggleSidebar }) => {
             setNavResults([]);
             setDropdownVisible(false);
         }
-    }, [debouncedSearchTerm, user?.schoolId, user?.userId, hasPermission, searchableNavLinks]);
+    }, [debouncedSearchTerm, user?.schoolId, user?.userId, hasPermission, searchableNavLinks, isParent]);
     
     const handleNavigate = (path: string, state?: object) => {
         navigate(path, { state });
@@ -117,95 +120,98 @@ const Header: React.FC<{ toggleSidebar: () => void }> = ({ toggleSidebar }) => {
                 </button>
             </div>
             
-            <div className="flex-1 flex justify-center px-4">
-                <div className="relative w-full max-w-lg" ref={searchRef}>
-                    <div className="relative">
-                        <input
-                            type="text"
-                            placeholder="Buscar en todo el sitio..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            onFocus={() => { if(searchTerm) setDropdownVisible(true); }}
-                            className="w-full pl-10 pr-4 py-2 border border-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/50 bg-secondary text-text-on-primary placeholder:text-text-tertiary"
-                            aria-label="Búsqueda global"
-                        />
-                        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-tertiary">
-                            <SearchIcon />
+            {!isParent && (
+                <div className="flex-1 flex justify-center px-4">
+                    <div className="relative w-full max-w-lg" ref={searchRef}>
+                        <div className="relative">
+                            <input
+                                type="text"
+                                placeholder="Buscar en todo el sitio..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onFocus={() => { if(searchTerm) setDropdownVisible(true); }}
+                                className="w-full pl-10 pr-4 py-2 border border-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/50 bg-secondary text-text-on-primary placeholder:text-text-tertiary"
+                                aria-label="Búsqueda global"
+                            />
+                            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-tertiary">
+                                <SearchIcon />
+                            </div>
                         </div>
+                        {isDropdownVisible && (
+                            <div className="absolute mt-2 w-full bg-surface border rounded-lg shadow-xl overflow-hidden max-h-96 overflow-y-auto">
+                                {loading && <div className="p-4 text-text-secondary">Buscando...</div>}
+                                {noResults && (
+                                    <div className="p-4 text-text-secondary">No se encontraron resultados para "{debouncedSearchTerm}".</div>
+                                )}
+                                
+                                {navResults.length > 0 && (
+                                    <div>
+                                        <h3 className="px-4 py-2 bg-background text-sm font-semibold text-text-secondary">Navegación</h3>
+                                        <ul>{navResults.map(nav => (
+                                            <li key={`nav-${nav.path}`}><button onClick={() => handleNavigate(nav.path)} className="w-full text-left px-4 py-2 hover:bg-background">
+                                                <p className="font-medium text-text-primary">{nav.label}</p>
+                                            </button></li>
+                                        ))}</ul>
+                                    </div>
+                                )}
+                                {results.users.length > 0 && (
+                                    <div>
+                                        <h3 className="px-4 py-2 bg-background text-sm font-semibold text-text-secondary">Usuarios</h3>
+                                        <ul>{results.users.slice(0, 3).map(u => (
+                                            <li key={`user-${u.userID}`}><button onClick={() => handleNavigate('/users', { searchTerm: u.userName })} className="w-full text-left px-4 py-2 hover:bg-background">
+                                                <p className="font-medium text-text-primary">{u.userName}</p>
+                                                <p className="text-sm text-text-secondary">{u.email}</p>
+                                            </button></li>
+                                        ))}</ul>
+                                    </div>
+                                )}
+                                {results.courses.length > 0 && (
+                                    <div>
+                                        <h3 className="px-4 py-2 bg-background text-sm font-semibold text-text-secondary">Cursos</h3>
+                                        <ul>{results.courses.slice(0, 3).map(c => (
+                                            <li key={`course-${c.courseID}`}><button onClick={() => handleNavigate('/courses', { searchTerm: c.name })} className="w-full text-left px-4 py-2 hover:bg-background">
+                                                <p className="font-medium text-text-primary">{c.name}</p>
+                                            </button></li>
+                                        ))}</ul>
+                                    </div>
+                                )}
+                                {results.classrooms.length > 0 && (
+                                    <div>
+                                        <h3 className="px-4 py-2 bg-background text-sm font-semibold text-text-secondary">Salones</h3>
+                                        <ul>{results.classrooms.slice(0, 3).map(c => (
+                                            <li key={`classroom-${c.classroomID}`}><button onClick={() => handleNavigate('/classrooms', { searchTerm: c.name })} className="w-full text-left px-4 py-2 hover:bg-background">
+                                                <p className="font-medium text-text-primary">{c.name}</p>
+                                            </button></li>
+                                        ))}</ul>
+                                    </div>
+                                )}
+                                {results.evaluations.length > 0 && (
+                                    <div>
+                                        <h3 className="px-4 py-2 bg-background text-sm font-semibold text-text-secondary">Evaluaciones</h3>
+                                        <ul>{results.evaluations.slice(0, 3).map(e => (
+                                            <li key={`eval-${e.evaluationID}`}><button onClick={() => handleNavigate(`/evaluations/edit/${e.evaluationID}`)} className="w-full text-left px-4 py-2 hover:bg-background">
+                                                <p className="font-medium text-text-primary">{e.title}</p>
+                                                <p className="text-sm text-text-secondary">Curso: {e.course?.name}</p>
+                                            </button></li>
+                                        ))}</ul>
+                                    </div>
+                                )}
+                                {results.extracurriculars.length > 0 && (
+                                    <div>
+                                        <h3 className="px-4 py-2 bg-background text-sm font-semibold text-text-secondary">Actividades Extracurriculares</h3>
+                                        <ul>{results.extracurriculars.slice(0, 3).map(e => (
+                                            <li key={`extra-${e.activityID}`}><button onClick={() => handleNavigate(`/extracurriculars/edit/${e.activityID}`)} className="w-full text-left px-4 py-2 hover:bg-background">
+                                                <p className="font-medium text-text-primary">{e.name}</p>
+                                            </button></li>
+                                        ))}</ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
-                    {isDropdownVisible && (
-                        <div className="absolute mt-2 w-full bg-surface border rounded-lg shadow-xl overflow-hidden max-h-96 overflow-y-auto">
-                            {loading && <div className="p-4 text-text-secondary">Buscando...</div>}
-                            {noResults && (
-                                <div className="p-4 text-text-secondary">No se encontraron resultados para "{debouncedSearchTerm}".</div>
-                            )}
-                            
-                            {navResults.length > 0 && (
-                                <div>
-                                    <h3 className="px-4 py-2 bg-background text-sm font-semibold text-text-secondary">Navegación</h3>
-                                    <ul>{navResults.map(nav => (
-                                        <li key={`nav-${nav.path}`}><button onClick={() => handleNavigate(nav.path)} className="w-full text-left px-4 py-2 hover:bg-background">
-                                            <p className="font-medium text-text-primary">{nav.label}</p>
-                                        </button></li>
-                                    ))}</ul>
-                                </div>
-                            )}
-                            {results.users.length > 0 && (
-                                <div>
-                                    <h3 className="px-4 py-2 bg-background text-sm font-semibold text-text-secondary">Usuarios</h3>
-                                    <ul>{results.users.slice(0, 3).map(u => (
-                                        <li key={`user-${u.userID}`}><button onClick={() => handleNavigate('/users', { searchTerm: u.userName })} className="w-full text-left px-4 py-2 hover:bg-background">
-                                            <p className="font-medium text-text-primary">{u.userName}</p>
-                                            <p className="text-sm text-text-secondary">{u.email}</p>
-                                        </button></li>
-                                    ))}</ul>
-                                </div>
-                            )}
-                            {results.courses.length > 0 && (
-                                <div>
-                                    <h3 className="px-4 py-2 bg-background text-sm font-semibold text-text-secondary">Cursos</h3>
-                                    <ul>{results.courses.slice(0, 3).map(c => (
-                                        <li key={`course-${c.courseID}`}><button onClick={() => handleNavigate('/courses', { searchTerm: c.name })} className="w-full text-left px-4 py-2 hover:bg-background">
-                                            <p className="font-medium text-text-primary">{c.name}</p>
-                                        </button></li>
-                                    ))}</ul>
-                                </div>
-                            )}
-                            {results.classrooms.length > 0 && (
-                                <div>
-                                    <h3 className="px-4 py-2 bg-background text-sm font-semibold text-text-secondary">Salones</h3>
-                                    <ul>{results.classrooms.slice(0, 3).map(c => (
-                                        <li key={`classroom-${c.classroomID}`}><button onClick={() => handleNavigate('/classrooms', { searchTerm: c.name })} className="w-full text-left px-4 py-2 hover:bg-background">
-                                            <p className="font-medium text-text-primary">{c.name}</p>
-                                        </button></li>
-                                    ))}</ul>
-                                </div>
-                            )}
-                            {results.evaluations.length > 0 && (
-                                <div>
-                                    <h3 className="px-4 py-2 bg-background text-sm font-semibold text-text-secondary">Evaluaciones</h3>
-                                    <ul>{results.evaluations.slice(0, 3).map(e => (
-                                        <li key={`eval-${e.evaluationID}`}><button onClick={() => handleNavigate(`/evaluations/edit/${e.evaluationID}`)} className="w-full text-left px-4 py-2 hover:bg-background">
-                                            <p className="font-medium text-text-primary">{e.title}</p>
-                                            <p className="text-sm text-text-secondary">Curso: {e.course?.name}</p>
-                                        </button></li>
-                                    ))}</ul>
-                                </div>
-                            )}
-                            {results.extracurriculars.length > 0 && (
-                                <div>
-                                    <h3 className="px-4 py-2 bg-background text-sm font-semibold text-text-secondary">Actividades Extracurriculares</h3>
-                                    <ul>{results.extracurriculars.slice(0, 3).map(e => (
-                                        <li key={`extra-${e.activityID}`}><button onClick={() => handleNavigate(`/extracurriculars/edit/${e.activityID}`)} className="w-full text-left px-4 py-2 hover:bg-background">
-                                            <p className="font-medium text-text-primary">{e.name}</p>
-                                        </button></li>
-                                    ))}</ul>
-                                </div>
-                            )}
-                        </div>
-                    )}
                 </div>
-            </div>
+            )}
+            {isParent && <div className="flex-1"></div>}
 
             <div className="flex items-center space-x-4">
                 <NotificationBell />

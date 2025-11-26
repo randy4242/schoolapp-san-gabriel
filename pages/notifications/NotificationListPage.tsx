@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { useNotifications } from '../../hooks/useNotifications';
 import { Notification } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import RejectUnlockRequestModal from '../../components/notifications/RejectUnlockRequestModal';
+import { apiService } from '../../services/apiService';
 
 
 // Helper to parse special notification content
@@ -14,7 +16,8 @@ const parseNotificationContent = (notification: Notification): {
     isUnlockRequest: boolean,
     evalId: string | null,
     requestingUserId: string | null,
-    evaluationName: string | null
+    evaluationName: string | null,
+    certId: string | null
 } => {
     let cleanTitle = notification.title;
     let text = notification.content;
@@ -23,6 +26,7 @@ const parseNotificationContent = (notification: Notification): {
     let evalId: string | null = null;
     let requestingUserId: string | null = null;
     let evaluationName: string | null = null;
+    let certId: string | null = null;
 
     // Generic URL parsing
     const urlMatch = text.match(/URL: (#[^\s]+)/);
@@ -44,14 +48,29 @@ const parseNotificationContent = (notification: Notification): {
         
         cleanTitle = notification.title.replace(/\[.*?\]/g, '').trim();
     }
-    return { cleanTitle, text, actionLink, isUnlockRequest, evalId, requestingUserId, evaluationName };
+
+    if (notification.title.startsWith('[BOLETA_REQUEST]')) {
+        cleanTitle = notification.title.replace('[BOLETA_REQUEST]', '').replace(/\[ID:\d+\]/, '').trim();
+    }
+    if (notification.title.startsWith('[BOLETA_STATUS]')) {
+        cleanTitle = notification.title.replace('[BOLETA_STATUS]', '').trim();
+    }
+
+    const certIdMatch = notification.content.match(/\[CERT_ID:(\d+)\]/);
+    if (certIdMatch) {
+        certId = certIdMatch[1];
+        text = text.replace(certIdMatch[0], '').trim();
+    }
+
+    return { cleanTitle, text, actionLink, isUnlockRequest, evalId, requestingUserId, evaluationName, certId };
 };
 
 const NotificationListPage: React.FC = () => {
   const { notifications, loading, markAsRead, markAllAsRead } = useNotifications();
   const navigate = useNavigate();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const isSuperAdmin = hasPermission([6]);
+  const isParent = user?.roleId === 3;
 
   const [rejectionDetails, setRejectionDetails] = useState<{
     evalId: string;
@@ -70,11 +89,43 @@ const NotificationListPage: React.FC = () => {
     setTimeout(() => setSuccessMessage(''), 3000);
   };
 
+  const handleViewCertificate = async (e: React.MouseEvent, certId: string) => {
+        e.stopPropagation();
+        if (!user?.schoolId) return;
+        
+        try {
+            const certificate = await apiService.getCertificateById(Number(certId), user.schoolId);
+            if (!certificate.studentName) {
+                const studentUser = await apiService.getUserById(certificate.userId, user.schoolId);
+                certificate.studentName = studentUser.userName;
+            }
+            
+            navigate('/report-viewer', { 
+                state: { 
+                    reportData: certificate, 
+                    reportType: 'boleta' 
+                } 
+            });
+        } catch (error) {
+            console.error("Failed to load certificate", error);
+            alert("No se pudo cargar la boleta.");
+        }
+    };
+
+  const filteredNotifications = useMemo(() => {
+      if (!isParent) return notifications;
+      return notifications.filter(n => 
+          n.title.toLowerCase().includes('boleta') || 
+          n.title.toLowerCase().includes('calificaciones') || 
+          n.content.includes('[CERT_ID:')
+      );
+  }, [notifications, isParent]);
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-text-primary">Todas las Notificaciones</h1>
-        {notifications.some(n => !n.isRead) && (
+        {filteredNotifications.some(n => !n.isRead) && (
             <button onClick={markAllAsRead} className="text-sm text-primary hover:underline">
                 Marcar todas como leídas
             </button>
@@ -84,17 +135,17 @@ const NotificationListPage: React.FC = () => {
       {successMessage && <div className="bg-success-light text-success-text p-3 rounded mb-4">{successMessage}</div>}
       {loading && <p>Cargando notificaciones...</p>}
       
-      {!loading && notifications.length === 0 && (
+      {!loading && filteredNotifications.length === 0 && (
         <div className="text-center py-8 bg-surface rounded-lg shadow-md">
           <p className="text-secondary">No tienes notificaciones.</p>
         </div>
       )}
 
-      {!loading && notifications.length > 0 && (
+      {!loading && filteredNotifications.length > 0 && (
         <div className="bg-surface shadow-md rounded-lg">
           <ul className="divide-y divide-border">
-            {notifications.map(n => {
-              const { cleanTitle, text, actionLink, isUnlockRequest, evalId, requestingUserId, evaluationName } = parseNotificationContent(n);
+            {filteredNotifications.map(n => {
+              const { cleanTitle, text, actionLink, isUnlockRequest, evalId, requestingUserId, evaluationName, certId } = parseNotificationContent(n);
               return (
               <li 
                 key={n.notifyID} 
@@ -110,7 +161,7 @@ const NotificationListPage: React.FC = () => {
                       </div>
                       <p className="text-sm text-text-secondary mt-1">{text}</p>
                       <div className="flex items-center space-x-2 mt-2">
-                          {actionLink && (
+                          {actionLink && !isParent && (
                               <button 
                                   onClick={(e) => {
                                       e.stopPropagation(); // Prevent parent onClick
@@ -121,6 +172,14 @@ const NotificationListPage: React.FC = () => {
                                   Ir a la Evaluación
                               </button>
                           )}
+                          {certId && (
+                                <button 
+                                    onClick={(e) => handleViewCertificate(e, certId)}
+                                    className="text-sm font-bold py-1 px-3 rounded bg-success text-white hover:bg-success-dark"
+                                >
+                                    Ver Boleta
+                                </button>
+                            )}
                           {isUnlockRequest && isSuperAdmin && evalId && requestingUserId && (
                               <button 
                                   onClick={(e) => {

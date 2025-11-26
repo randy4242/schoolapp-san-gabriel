@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { ChevronDownIcon, LogoutIcon, HomeIcon, UsersIcon, BookOpenIcon, SchoolIcon, ClipboardListIcon, LinkIcon, BeakerIcon, CalendarIcon, DocumentTextIcon, CreditCardIcon, CubeIcon, BellIcon, UserCheckIcon, ChartBarIcon, DocumentReportIcon, HistoryIcon, UserCircleIcon, ClipboardCheckIcon, CashIcon, ShoppingCartIcon, BriefcaseIcon, TrendingUpIcon, LedgerIcon } from './icons';
+import { ChevronDownIcon, LogoutIcon, HomeIcon, UsersIcon, BookOpenIcon, SchoolIcon, ClipboardListIcon, LinkIcon, BeakerIcon, CalendarIcon, DocumentTextIcon, CreditCardIcon, CubeIcon, BellIcon, UserCheckIcon, ChartBarIcon, DocumentReportIcon, HistoryIcon, UserCircleIcon, ClipboardCheckIcon, CashIcon, ShoppingCartIcon, BriefcaseIcon, TrendingUpIcon, LedgerIcon, PercentageIcon, PlusIcon } from './icons';
 
 interface NavLink {
   to: string;
@@ -40,6 +40,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 
   const Is = (roles: number[]) => hasPermission(roles);
 
+  const allowedSchoolsForBoletas = [5, 6, 7, 8, 9];
+  const canViewBoletas = user && allowedSchoolsForBoletas.includes(user.schoolId);
+
   const navSections: NavSection[] = [
     {
       label: 'Usuarios',
@@ -48,6 +51,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       links: [
         { to: '/users', label: 'Ver Usuarios', icon: <span />, permission: (has) => has([6, 7]) },
         { to: '/users/create', label: 'Crear Usuario', icon: <span />, permission: (has) => has([6]) },
+        { to: '/users/create-bulk-ia', label: 'Crear Multiples (IA)', icon: <span />, permission: (has) => has([6]) && user?.schoolId === 5 },
       ].filter(l => l.permission(Is))
     },
     {
@@ -89,6 +93,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       ].filter(l => l.permission(Is))
     },
     {
+      label: 'Boletas',
+      icon: <DocumentTextIcon />,
+      permission: (has) => (canViewBoletas ?? false) && has([6, 7, 2, 9, 10, 3]),
+      links: [
+        { to: '/boletas', label: 'Ver Boletas', icon: <span />, permission: (has) => has([6, 7, 2, 9, 10, 3]) },
+        { to: '/boletas/create', label: 'Crear Boleta', icon: <span />, permission: (has) => has([6, 7, 2, 9, 10]) },
+      ].filter(l => l.permission(Is))
+    },
+    {
       label: 'Administrativo',
       icon: <DocumentReportIcon />,
       permission: (has) => has([6, 7]),
@@ -97,6 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
         { to: '/invoices', label: 'Cuentas Generales', icon: <ClipboardListIcon />, permission: (has) => has([6, 7]) },
         { to: '/purchases', label: 'Compras', icon: <ShoppingCartIcon />, permission: (has) => has([6, 7]) },
         { to: '/payroll', label: 'Nómina', icon: <BriefcaseIcon />, permission: (has) => has([6, 7]) },
+        { to: '/withholdings', label: 'Retenciones', icon: <PercentageIcon />, permission: (has) => has([6, 7]) },
         { to: '/administrative/monthly-generation', label: 'Generación Mensual', icon: <CalendarIcon />, permission: (has) => has([6, 7]) },
       ].filter(l => l.permission(Is))
     },
@@ -144,9 +158,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 
 
   const sidebarClasses = `
-    bg-sidebar-background text-text-on-primary flex-col h-full flex-shrink-0
+    bg-sidebar-background text-text-on-primary flex flex-col h-full flex-shrink-0
     fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out
-    md:relative md:flex md:translate-x-0
+    md:relative md:translate-x-0
     ${isOpen ? 'translate-x-0' : '-translate-x-full'}
   `;
 
@@ -158,7 +172,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
         aria-hidden="true"
       ></div>
       <div className={sidebarClasses}>
-        <div className="p-4 border-b border-sidebar-border">
+        <div className="p-4 border-b border-sidebar-border flex-shrink-0">
           <h1 className="text-xl font-bold text-accent">SchoolApp</h1>
           <span className="text-sm text-sidebar-text truncate">{user?.email}</span>
         </div>
@@ -201,7 +215,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
            </div>
           ))}
         </nav>
-        <div className="p-4 border-t border-sidebar-border">
+        <div className="p-4 border-t border-sidebar-border flex-shrink-0">
           <button onClick={logout} className="w-full flex items-center px-4 py-2 text-text-on-primary bg-danger hover:bg-danger-dark font-semibold rounded-md transition-colors">
             <LogoutIcon />
             <span className="ml-3">Cerrar sesión</span>

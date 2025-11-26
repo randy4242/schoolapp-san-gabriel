@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { apiService } from '../../services/apiService';
@@ -189,15 +190,11 @@ const EvaluationListPage: React.FC = () => {
         });
     }, [evaluations, selectedClassroomIds, searchTerm, idFilter]);
 
-    const groupedEvaluations = useMemo(() => {
-        const classroomIdToNameMap = new Map(classrooms.map(c => [c.classroomID, c.name]));
+    const groupedEvaluations: Record<string, Evaluation[]> = useMemo(() => {
+        const classroomIdToNameMap = new Map<number, string>(classrooms.map(c => [c.classroomID, c.name]));
         classroomIdToNameMap.set(0, "Sin Salón Asignado");
 
-// FIX: Explicitly typed the initial value of reduce to `{} as Record<string, Evaluation[]>` to resolve index signature errors.
-// FIX: Type 'unknown' cannot be used as an index type.
-// FIX: Explicitly typed the accumulator for reduce to resolve index signature errors. The `acc` parameter was being inferred as `unknown`.
-// FIX: Explicitly typed the accumulator for reduce to resolve index signature errors. The `acc` parameter was being inferred as `unknown`.
-        const groups = filteredEvaluations.reduce<Record<string, Evaluation[]>>((acc, evaluation) => {
+        const groups = filteredEvaluations.reduce((acc, evaluation) => {
             const classroomId = evaluation.classroomID ?? 0;
             const groupName = classroomIdToNameMap.get(classroomId) || `Salón Desconocido #${classroomId}`;
             if (!acc[groupName]) {
@@ -205,11 +202,11 @@ const EvaluationListPage: React.FC = () => {
             }
             acc[groupName].push(evaluation);
             return acc;
-        }, {});
+        }, {} as Record<string, Evaluation[]>);
         
         const sortedEntries = Object.entries(groups).sort(([keyA], [keyB]) => keyA.localeCompare(keyB));
         
-        return Object.fromEntries(sortedEntries);
+        return Object.fromEntries(sortedEntries) as Record<string, Evaluation[]>;
     }, [filteredEvaluations, classrooms]);
     
     const getEvaluationParts = (description: string | null | undefined): { text: string, percent: string, override: string } => {
@@ -351,6 +348,18 @@ const EvaluationListPage: React.FC = () => {
         }
         setSelectedClassroomIds(newSet);
     };
+
+    const handleAssignGrades = (evaluation: Evaluation) => {
+        const isDescriptiveSchool = user?.schoolId && [5, 6, 7, 8, 9].includes(user.schoolId);
+        const courseName = evaluation.course?.name?.toLowerCase() || '';
+        const isDescriptiveCourse = courseName.includes('nivel') || courseName.includes('sala');
+
+        if (isDescriptiveSchool && isDescriptiveCourse) {
+            navigate(`/evaluations/assign-descriptive/${evaluation.evaluationID}`);
+        } else {
+            navigate(`/evaluations/assign/${evaluation.evaluationID}`);
+        }
+    };
     
     return (
         <div>
@@ -446,6 +455,11 @@ const EvaluationListPage: React.FC = () => {
                                         const hasOverride = e.description?.includes('@@OVERRIDE:');
                                         const lockedForTeacher = isLockedForTeacher(e);
 
+                                        const isDescriptiveSchool = user?.schoolId && [5, 6, 7, 8, 9].includes(user.schoolId);
+                                        const evalCourseName = e.course?.name?.toLowerCase() || '';
+                                        const isDescriptiveCourse = evalCourseName.includes('nivel') || evalCourseName.includes('sala');
+                                        const isDescriptive = isDescriptiveSchool && isDescriptiveCourse;
+
                                         return (
                                         <tr key={e.evaluationID} className={`hover:bg-background ${!editable && !isSuperAdmin ? 'bg-gray-100' : ''}`}>
                                             <td className="px-6 py-4 whitespace-nowrap">
@@ -461,7 +475,9 @@ const EvaluationListPage: React.FC = () => {
                                             <td className="px-6 py-4 whitespace-nowrap">{e.lapso?.nombre || "N/A"}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                 <div className="flex items-center space-x-2">
-                                                    <button onClick={() => navigate(`/evaluations/assign/${e.evaluationID}`)} className="text-success hover:text-success-text p-1" title="Asignar Notas"><ClipboardCheckIcon /></button>
+                                                    <button onClick={() => handleAssignGrades(e)} className="text-success hover:text-success-text p-1" title={isDescriptive ? "Llenar Planilla Descriptiva" : "Asignar Notas"}>
+                                                        <ClipboardCheckIcon />
+                                                    </button>
                                                     
                                                     {editable ? (
                                                         <button onClick={() => navigate(`/evaluations/edit/${e.evaluationID}`)} className="p-1 text-warning hover:text-warning-dark" title="Editar">
@@ -495,115 +511,53 @@ const EvaluationListPage: React.FC = () => {
                 ))}
                 </div>
             )}
-             {!loading && Object.keys(groupedEvaluations).length === 0 && (
-                <div className="text-center py-8 bg-surface rounded-lg shadow-md">
-                    <p className="text-secondary">No se encontraron evaluaciones con los filtros actuales.</p>
+            {!loading && !error && Object.keys(groupedEvaluations).length === 0 && (
+                 <div className="text-center py-8 bg-surface rounded-lg shadow-md">
+                    <p className="text-secondary">No se encontraron evaluaciones que coincidan con los filtros.</p>
                 </div>
-             )}
+            )}
             
-            <Modal
-                isOpen={!!evaluationToUnlock}
-                onClose={() => setEvaluationToUnlock(null)}
-                title="Confirmar Desbloqueo de Evaluación"
-            >
-                {evaluationToUnlock && (
+            {evaluationToUnlock && (
+                <Modal isOpen={true} onClose={() => setEvaluationToUnlock(null)} title="Confirmar Desbloqueo">
                     <div>
-                        <p className="text-text-secondary mb-4">
-                            ¿Está seguro de darle permiso de edición al profesor <strong className="text-text-primary">{userMap.get(evaluationToUnlock.userID) || 'Desconocido'}</strong>?
-                        </p>
-                        <div className="flex justify-end space-x-4">
-                            <button
-                                type="button"
-                                onClick={() => setEvaluationToUnlock(null)}
-                                className="bg-background text-text-primary py-2 px-4 rounded hover:bg-border transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                type="button"
-                                onClick={confirmGrantOverride}
-                                className="bg-accent text-text-on-accent py-2 px-4 rounded hover:bg-opacity-80 transition-colors"
-                            >
-                                Sí, Desbloquear
-                            </button>
-                        </div>
+                        <p>¿Estás seguro de que quieres desbloquear la edición de la evaluación "<strong>{evaluationToUnlock.title}</strong>" para el profesor <strong>{userMap.get(evaluationToUnlock.userID)}</strong>?</p>
+                        <p className="text-sm text-secondary mt-2">Esta acción permitirá la edición por tiempo indefinido hasta que se vuelva a bloquear manualmente. Se enviará una notificación al profesor.</p>
                     </div>
-                )}
-            </Modal>
+                    <div className="flex justify-end space-x-2 pt-4 mt-4 border-t">
+                        <button onClick={() => setEvaluationToUnlock(null)} className="py-2 px-4 rounded bg-background">Cancelar</button>
+                        <button onClick={confirmGrantOverride} className="py-2 px-4 rounded bg-accent text-text-on-accent">Sí, Desbloquear</button>
+                    </div>
+                </Modal>
+            )}
+            
+            {evaluationToLock && (
+                 <Modal isOpen={true} onClose={() => setEvaluationToLock(null)} title="Confirmar Bloqueo">
+                    <div>
+                        <p>¿Estás seguro de que quieres volver a bloquear la evaluación "<strong>{evaluationToLock.title}</strong>"?</p>
+                         <p className="text-sm text-secondary mt-2">Esto revocará el permiso de edición manual que se había concedido.</p>
+                    </div>
+                     <div className="flex justify-end space-x-2 pt-4 mt-4 border-t">
+                        <button onClick={() => setEvaluationToLock(null)} className="py-2 px-4 rounded bg-background">Cancelar</button>
+                        <button onClick={confirmLockEvaluation} className="py-2 px-4 rounded bg-danger text-text-on-primary">Sí, Bloquear</button>
+                    </div>
+                </Modal>
+            )}
 
-            <Modal
-                isOpen={!!evaluationToLock}
-                onClose={() => setEvaluationToLock(null)}
-                title="Confirmar Bloqueo de Evaluación"
-            >
-                {evaluationToLock && (
-                    <div>
-                        <p className="text-text-secondary mb-4">
-                            ¿Está seguro de que desea bloquear la edición manual de la evaluación <strong className="text-text-primary">"{evaluationToLock.title}"</strong>?
-                            <br/>
-                            Esto revocará el permiso de desbloqueo y el profesor ya no podrá editarla.
-                        </p>
-                        <div className="flex justify-end space-x-4">
-                            <button
-                                type="button"
-                                onClick={() => setEvaluationToLock(null)}
-                                className="bg-background text-text-primary py-2 px-4 rounded hover:bg-border transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                type="button"
-                                onClick={confirmLockEvaluation}
-                                className="bg-danger text-text-on-primary py-2 px-4 rounded hover:bg-danger-dark transition-colors"
-                            >
-                                Sí, Bloquear
-                            </button>
-                        </div>
+            {requestingUnlockFor && (
+                <Modal isOpen={true} onClose={() => setRequestingUnlockFor(null)} title="Solicitar Edición">
+                     <div>
+                        <p>Se enviará una solicitud a un Super Admin para desbloquear la evaluación "<strong>{requestingUnlockFor.title}</strong>".</p>
+                        <p className="text-sm text-secondary mt-2">Puedes añadir un motivo para tu solicitud.</p>
+                        <textarea value={unlockComment} onChange={(e) => setUnlockComment(e.target.value)} className="w-full p-2 mt-2 border rounded" placeholder="Motivo (opcional)..." />
                     </div>
-                )}
-            </Modal>
-            
-            <Modal
-                isOpen={!!requestingUnlockFor}
-                onClose={() => setRequestingUnlockFor(null)}
-                title="Solicitar Permiso de Edición"
-            >
-                {requestingUnlockFor && (
-                    <div>
-                        <p className="text-text-secondary mb-4">
-                            Estás solicitando permiso para editar la evaluación <strong className="text-text-primary">"{requestingUnlockFor.title}"</strong>. Puedes agregar un comentario opcional para el administrador.
-                        </p>
-                        <textarea
-                            value={unlockComment}
-                            onChange={(e) => setUnlockComment(e.target.value)}
-                            placeholder="Motivo de la solicitud (opcional)..."
-                            className="w-full p-2 border border-border rounded bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
-                            rows={3}
-                        />
-                        <div className="flex justify-end space-x-4 mt-4">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setRequestingUnlockFor(null);
-                                    setUnlockComment('');
-                                }}
-                                className="bg-background text-text-primary py-2 px-4 rounded hover:bg-border transition-colors"
-                                disabled={isSendingRequest}
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleSendUnlockRequest}
-                                className="bg-accent text-text-on-accent py-2 px-4 rounded hover:bg-opacity-80 transition-colors disabled:bg-secondary"
-                                disabled={isSendingRequest}
-                            >
-                                {isSendingRequest ? 'Enviando...' : 'Enviar Solicitud'}
-                            </button>
-                        </div>
+                     <div className="flex justify-end space-x-2 pt-4 mt-4 border-t">
+                        <button onClick={() => setRequestingUnlockFor(null)} disabled={isSendingRequest} className="py-2 px-4 rounded bg-background">Cancelar</button>
+                        <button onClick={handleSendUnlockRequest} disabled={isSendingRequest} className="py-2 px-4 rounded bg-primary text-text-on-accent disabled:bg-secondary">
+                           {isSendingRequest ? 'Enviando...' : 'Enviar Solicitud'}
+                        </button>
                     </div>
-                )}
-            </Modal>
+                </Modal>
+            )}
         </div>
     );
 };

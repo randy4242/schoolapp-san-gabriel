@@ -1,3 +1,4 @@
+
 // FIX: Replaced file content with actual type definitions to resolve circular dependencies and missing exports.
 export interface AuthenticatedUser {
     token: string;
@@ -212,6 +213,7 @@ export interface Grade {
     gradeValue: number | null;
     gradeText: string | null;
     comments: string | null;
+    hasImage: boolean;
 }
 
 export interface StudentGradeData {
@@ -333,8 +335,8 @@ export interface Certificate {
     certificateType: string;
     issueDate: string;
     content: string;
-    signatoryName: string;
-    signatoryTitle: string;
+    signatoryName?: string; // Made optional
+    signatoryTitle?: string; // Made optional
     schoolId: number;
     schoolName?: string;
     schoolCode?: string;
@@ -345,10 +347,11 @@ export interface Certificate {
 export interface CertificateGeneratePayload {
     userId: number;
     certificateType: string;
-    signatoryName: string;
-    signatoryTitle: string;
+    signatoryName?: string;
+    signatoryTitle?: string;
     content: string;
     schoolId: number;
+    issueDate?: string;
 }
 
 export interface Product {
@@ -926,4 +929,81 @@ export interface BalanceSheet {
   liabilities: number;
   equity: number;
   balance: number; // debe ser 0
+}
+
+// Withholdings Module Types
+
+export interface WithholdingType {
+  withholdingTypeID: number;
+  name: string;
+  description: string;
+}
+
+export interface GenerateWithholdingPayload {
+  purchaseID: number;
+  withholdingTypeID: number;
+  ratePercent: number;
+  issueDate: string;
+  createdByUserID: number;
+}
+
+export interface GenerateWithholdingResponse {
+  withholdingID: number;
+  amountWithheld: number;
+}
+
+export interface WithholdingListItem {
+  withholdingID: number;
+  schoolID: number;
+  withholdingTypeID: number;
+  sourceTable: string;
+  sourceID: number;
+  issueDate: string;
+  periodYear: number;
+  periodMonth: number;
+  agentRifCedula: string;
+  agentName: string;
+  subjectRifCedula: string;
+  subjectName: string;
+  totalBase: number;
+  totalWithheld: number;
+  status: 'Active' | 'Annulled';
+  typeName?: string; // Client-side addition
+}
+
+export interface WithholdingHeader {
+  withholdingID: number;
+  schoolID: number;
+  withholdingTypeID: number;
+  issueDate: string;
+  agentName: string;
+  subjectName: string;
+  totalBase: number;
+  totalWithheld: number;
+  status: 'Active' | 'Annulled';
+}
+
+export interface WithholdingLine {
+  withholdingLineID: number;
+  withholdingID: number;
+  conceptCode: string;
+  description: string;
+  baseAmount: number;
+  ratePercent: number;
+  amountWithheld: number;
+}
+
+export interface WithholdingDetail {
+  header: WithholdingHeader;
+  lines: WithholdingLine[];
+}
+
+export interface Indicator {
+    text: string;
+}
+
+export interface IndicatorSection {
+    title: string;
+    indicators: Indicator[];
+    hasRecommendations?: boolean;
 }

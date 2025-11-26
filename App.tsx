@@ -1,4 +1,9 @@
 
+
+
+
+
+
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
@@ -9,6 +14,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import UserListPage from './pages/users/UserListPage';
 import UserFormPage from './pages/users/UserFormPage';
+import BulkUserCreationPage from './pages/users/BulkUserCreationPage';
 import CourseListPage from './pages/courses/CourseListPage';
 import CourseFormPage from './pages/courses/CourseFormPage';
 import ClassroomListPage from './pages/classrooms/ClassroomListPage';
@@ -50,6 +56,10 @@ import PayrollDetailPage from './pages/administrative/PayrollDetailPage';
 import AnalyticsPage from './pages/analytics/AnalyticsPage';
 import GLPostingPage from './pages/gl/GLPostingPage';
 import GeneralLedgerPage from './pages/gl/GeneralLedgerPage';
+import WithholdingListPage from './pages/withholdings/WithholdingListPage';
+import WithholdingFormPage from './pages/withholdings/WithholdingFormPage';
+import BoletaListPage from './pages/boletas/BoletaListPage';
+import BoletaFormPage from './pages/boletas/BoletaFormPage';
 
 // Components
 import ProtectedRoute from './components/ProtectedRoute';
@@ -59,6 +69,7 @@ import ThemeStyles from './components/ThemeStyles';
 import { NotificationProvider } from './context/NotificationContext';
 import ProfilePage from './pages/profile/ProfilePage';
 import NotificationListPage from './pages/notifications/NotificationListPage';
+import AssignDescriptiveGradesPage from './pages/evaluations/AssignDescriptiveGradesPage';
 
 const App: React.FC = () => {
   const { user, loading } = useAuth();
@@ -90,6 +101,7 @@ const App: React.FC = () => {
             {/* Users */}
             <Route path="users" element={<UserListPage />} />
             <Route path="users/create" element={<UserFormPage />} />
+            <Route path="users/create-bulk-ia" element={<BulkUserCreationPage />} />
             <Route path="users/edit/:id" element={<UserFormPage />} />
             <Route path="users/block/:id" element={<UserBlockPage />} />
 
@@ -108,6 +120,7 @@ const App: React.FC = () => {
             <Route path="evaluations/create" element={<EvaluationFormPage />} />
             <Route path="evaluations/edit/:id" element={<EvaluationFormPage />} />
             <Route path="evaluations/assign/:evaluationId" element={<AssignGradesPage />} />
+            <Route path="evaluations/assign-descriptive/:evaluationId" element={<AssignDescriptiveGradesPage />} />
             
             {/* Notifications */}
             <Route path="notifications/send" element={<SendNotificationPage />} />
@@ -137,6 +150,11 @@ const App: React.FC = () => {
             {/* Certificates */}
             <Route path="certificates" element={<CertificateListPage />} />
             <Route path="certificates/generate" element={<CertificateFormPage />} />
+            
+            {/* Boletas */}
+            <Route path="boletas" element={<BoletaListPage />} />
+            <Route path="boletas/create" element={<BoletaFormPage />} />
+            <Route path="boletas/edit/:id" element={<BoletaFormPage />} />
 
             {/* Products */}
             <Route path="products" element={<ProductListPage />} />
@@ -166,6 +184,8 @@ const App: React.FC = () => {
             <Route path="payroll" element={<PayrollListPage />} />
             <Route path="payroll/create" element={<PayrollFormPage />} />
             <Route path="payroll/detail/:id" element={<PayrollDetailPage />} />
+            <Route path="withholdings" element={<WithholdingListPage />} />
+            <Route path="withholdings/create" element={<WithholdingFormPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
             
             {/* GL */}

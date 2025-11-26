@@ -1,8 +1,11 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import { apiService } from '../../../services/apiService';
 import { TrialBalanceRow } from '../../../types';
 import { exportToCsv } from '../../../lib/exportUtils';
+
+type GroupedDataType = Record<string, { rows: TrialBalanceRow[], totals: { debit: number, credit: number, net: number } }>;
 
 const TrialBalanceReport: React.FC = () => {
     const { user } = useAuth();
@@ -36,8 +39,7 @@ const TrialBalanceReport: React.FC = () => {
     }, [data, sortConfig]);
 
     const groupedData = useMemo(() => {
-        // FIX: Use generic on reduce to correctly type the accumulator and avoid downstream type errors.
-        return sortedData.reduce<Record<string, { rows: TrialBalanceRow[], totals: { debit: number, credit: number, net: number } }>>((acc, row) => {
+        return sortedData.reduce((acc, row) => {
             const type = row.accountType || 'Sin Tipo';
             if (!acc[type]) {
                 acc[type] = { rows: [], totals: { debit: 0, credit: 0, net: 0 } };
@@ -47,7 +49,7 @@ const TrialBalanceReport: React.FC = () => {
             acc[type].totals.credit += row.totalCredit;
             acc[type].totals.net += row.net;
             return acc;
-        }, {});
+        }, {} as GroupedDataType);
     }, [sortedData]);
     
     const grandTotals = useMemo(() => {
@@ -77,7 +79,7 @@ const TrialBalanceReport: React.FC = () => {
             {loading && <p>Cargando reporte...</p>}
             {error && <p className="text-danger bg-danger-light p-3 rounded">{error}</p>}
 
-            {Object.entries(groupedData).map(([type, group]) => (
+            {(Object.entries(groupedData) as [string, GroupedDataType[string]][]).map(([type, group]) => (
                 <div key={type} className="bg-surface shadow-md rounded-lg overflow-x-auto">
                     <h3 className="text-lg font-semibold p-4 bg-background">{type}</h3>
                     <table className="min-w-full divide-y">

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { apiService } from '../../services/apiService';
@@ -70,6 +71,7 @@ const ChatWidget: React.FC = () => {
     
 
     if (!user) return null;
+    if (user.roleId === 3) return null; // Hide completely for Parents
 
     if (!isOpen) {
         return (

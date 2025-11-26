@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { useAuth } from '../../hooks/useAuth';
@@ -62,6 +63,8 @@ const ProfilePage: React.FC = () => {
         if (!user) return 'Desconocido';
         return ROLES.find(r => r.id === user.roleID)?.name || 'Desconocido';
     }, [user]);
+
+    const isParent = authUser?.roleId === 3;
 
     const onSubmit: SubmitHandler<FormInputs> = async (data) => {
         if (!authUser) return;
@@ -172,9 +175,11 @@ const ProfilePage: React.FC = () => {
                         </div>
                     </div>
                     
-                    <button onClick={() => setIsEditMode(true)} className="mt-8 bg-accent text-text-on-accent font-bold py-2 px-6 rounded-lg hover:bg-opacity-90 shadow-lg transition-transform transform hover:scale-105">
-                        Editar Perfil
-                    </button>
+                    {!isParent && (
+                        <button onClick={() => setIsEditMode(true)} className="mt-8 bg-accent text-text-on-accent font-bold py-2 px-6 rounded-lg hover:bg-opacity-90 shadow-lg transition-transform transform hover:scale-105">
+                            Editar Perfil
+                        </button>
+                    )}
                 </div>
             )}
         </div>

@@ -1,6 +1,7 @@
-import { AuthenticatedUser, DashboardStats, User, Course, Teacher, Classroom, Student, ClassroomAttendanceStats, Lapso, StudentGradesVM, StudentAttendanceStats, LapsoGradeApiItem, StudentGradeItem, StudentGradesGroup, AuthResponse, Evaluation, Grade, Child, LoginHistoryRecord, Payment, Notification, ReportEmgClassroomResponse, ExtracurricularActivity, Certificate, CertificateGeneratePayload, Product, ProductWithAudiences, ProductAudience, AudiencePayload, Enrollment, ReportRrdeaClassroomResponse, Parent, UserDetails, AttendanceRecord, AttendanceEditPayload, ExtracurricularEnrollmentPayload, EnrolledStudent, ClassroomAverage, ClassroomStudentAveragesResponse, MedicalInfo, ApprovePaymentResponse, InvoicePrintVM, PendingInvoice, PaginatedInvoices, GenerateInvoicesRunDto, MonthlyGenerationResult, MonthlyARSummary, PaginatedPurchases, PurchaseCreatePayload, PurchaseDetail, PurchaseCreationResponse, PayrollRunPayload, PayrollPreviewResponse, PayrollRunResponse, PaginatedPayrolls, PayrollDetail, BaseSalaryUpdatePayload, Chat, Message, CreateGroupChatDto, SendMessageDto, PnlReportResponse, SalesByProductResponse, InventorySnapshotResponse, InventoryKardexResponse, ArAgingSummaryResponse, ArAgingByCustomerResponse, TrialBalanceRow, LedgerRow, IncomeStatement, BalanceSheet } from '../types';
+import { AuthenticatedUser, DashboardStats, User, Course, Teacher, Classroom, Student, ClassroomAttendanceStats, Lapso, StudentGradesVM, StudentAttendanceStats, LapsoGradeApiItem, StudentGradeItem, StudentGradesGroup, AuthResponse, Evaluation, Grade, Child, LoginHistoryRecord, Payment, Notification, ReportEmgClassroomResponse, ExtracurricularActivity, Certificate, CertificateGeneratePayload, Product, ProductWithAudiences, ProductAudience, AudiencePayload, Enrollment, ReportRrdeaClassroomResponse, Parent, UserDetails, AttendanceRecord, AttendanceEditPayload, ExtracurricularEnrollmentPayload, EnrolledStudent, ClassroomAverage, ClassroomStudentAveragesResponse, MedicalInfo, ApprovePaymentResponse, InvoicePrintVM, PendingInvoice, PaginatedInvoices, GenerateInvoicesRunDto, MonthlyGenerationResult, MonthlyARSummary, PaginatedPurchases, PurchaseCreatePayload, PurchaseDetail, PurchaseCreationResponse, PayrollRunPayload, PayrollPreviewResponse, PayrollRunResponse, PaginatedPayrolls, PayrollDetail, BaseSalaryUpdatePayload, Chat, Message, CreateGroupChatDto, SendMessageDto, PnlReportResponse, SalesByProductResponse, InventorySnapshotResponse, InventoryKardexResponse, ArAgingSummaryResponse, ArAgingByCustomerResponse, TrialBalanceRow, LedgerRow, IncomeStatement, BalanceSheet, WithholdingType, GenerateWithholdingPayload, GenerateWithholdingResponse, WithholdingListItem, WithholdingDetail } from '../types';
 
 const BASE_URL = "https://siscamoruco.somee.com/";
+const WITHHOLDING_BASE_URL = "https://siscamoruco.somee.com/api/withholdings";
 
 
 export interface GlobalSearchResult {
@@ -16,6 +17,18 @@ class ApiService {
 
   setToken(token: string | null) {
     this.token = token;
+  }
+  
+  getBaseUrl() {
+      return BASE_URL;
+  }
+
+  getAuthHeaders(): HeadersInit {
+      const headers: HeadersInit = {};
+      if (this.token) {
+          headers['Authorization'] = `Bearer ${this.token}`;
+      }
+      return headers;
   }
 
   private getHeaders() {
@@ -43,6 +56,37 @@ class ApiService {
             errorMessage = parsedError.message || parsedError.title || errorMessage;
         } catch (e) {
             // If parsing fails, use the raw text if it's not too long
+            errorMessage = errorData.length < 200 ? errorData : errorMessage;
+        }
+      throw new Error(errorMessage);
+    }
+    
+    if (response.status === 204) { // No content
+        return null as T;
+    }
+
+    const text = await response.text();
+    try {
+        return JSON.parse(text) as T;
+    } catch (e) {
+        return text as T;
+    }
+  }
+
+  private async requestWithholding<T,>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const response = await fetch(`${WITHHOLDING_BASE_URL}${endpoint}`, {
+      ...options,
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.text();
+        console.error('Withholding API Error:', errorData);
+        let errorMessage = `API Error: ${response.statusText}`;
+        try {
+            const parsedError = JSON.parse(errorData);
+            errorMessage = parsedError.message || parsedError.title || errorMessage;
+        } catch (e) {
             errorMessage = errorData.length < 200 ? errorData : errorMessage;
         }
       throw new Error(errorMessage);
@@ -181,6 +225,11 @@ class ApiService {
     return this.request<MedicalInfo>(`api/medical-info/${userId}?schoolid=${schoolId}`);
   }
 
+  async getSchoolName(schoolId: number): Promise<string> {
+    const school = await this.request<{name: string}>(`api/schools/${schoolId}`);
+    return school.name;
+  }
+
   async createUser(user: Omit<User, 'userID' | 'isBlocked'> & { passwordHash: string }): Promise<User> {
     return this.request<User>('api/auth/register', {
       method: 'POST',
@@ -195,8 +244,8 @@ class ApiService {
     });
   }
 
-  async deleteUser(id: number, schoolId: number): Promise<void> {
-    return this.request<void>(`api/users/${id}?schoolId=${schoolId}`, {
+  async deleteUser(id: number): Promise<void> {
+    return this.request<void>(`api/users/${id}`, {
       method: 'DELETE',
     });
   }
@@ -442,11 +491,29 @@ class ApiService {
         return this.request<Grade[]>(`api/grades/evaluation/${evaluationId}/grades?schoolId=${schoolId}`);
     }
 
-    async assignGrade(grade: Omit<Grade, 'gradeID'>): Promise<void> {
+    async assignGrade(grade: Omit<Grade, 'gradeID' | 'hasImage'>): Promise<void> {
         return this.request<void>('api/grades/assign', {
             method: 'POST',
             body: JSON.stringify(grade),
         });
+    }
+
+    async uploadGradeImageFile(gradeId: number, file: File): Promise<{ message: string }> {
+        const formData = new FormData();
+        formData.append('file', file);
+    
+        const response = await fetch(`${BASE_URL}api/grades/${gradeId}/imagefile`, {
+            method: 'POST',
+            headers: this.getAuthHeaders(),
+            body: formData,
+        });
+    
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || `Failed to upload image: ${response.statusText}`);
+        }
+        
+        return response.json();
     }
 
     async getSchoolClassroomAverages(schoolId: number): Promise<ClassroomAverage[]> {
@@ -650,6 +717,14 @@ class ApiService {
   async createCertificate(payload: CertificateGeneratePayload): Promise<Certificate> {
       return this.request<Certificate>('api/Certificates', {
           method: 'POST',
+          body: JSON.stringify(payload),
+      });
+  }
+
+  async updateCertificate(id: number, payload: Partial<CertificateGeneratePayload>): Promise<Certificate> {
+      const url = `api/Certificates/${id}${payload.schoolId ? `?schoolId=${payload.schoolId}` : ''}`;
+      return this.request<Certificate>(url, {
+          method: 'PUT',
           body: JSON.stringify(payload),
       });
   }
@@ -941,6 +1016,44 @@ class ApiService {
     async getBalanceSheet(schoolId: number, asOf: string): Promise<BalanceSheet> {
         const params = new URLSearchParams({ schoolId: schoolId.toString(), asOf });
         return this.glRequest<BalanceSheet>(`balance-sheet?${params.toString()}`);
+    }
+
+    // Withholdings
+    async getWithholdingTypes(): Promise<WithholdingType[]> {
+        // The prompt doesn't specify an endpoint for this, so we provide common static types.
+        // If an endpoint like GET /types existed, it would be: return this.requestWithholding<WithholdingType[]>('/types');
+        return Promise.resolve([
+            { withholdingTypeID: 1, name: 'IVA', description: 'Impuesto al Valor Agregado' },
+            { withholdingTypeID: 2, name: 'ISLR', description: 'Impuesto Sobre La Renta' }
+        ]);
+    }
+
+    async generatePurchaseWithholding(payload: GenerateWithholdingPayload): Promise<GenerateWithholdingResponse> {
+        return this.requestWithholding<GenerateWithholdingResponse>('/purchase', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    }
+    
+    async getWithholdings(params: { schoolId: number; year?: number; month?: number; type?: string; subjectRif?: string }): Promise<WithholdingListItem[]> {
+        const query = new URLSearchParams({
+            schoolId: params.schoolId.toString(),
+        });
+        if (params.year) query.append('year', params.year.toString());
+        if (params.month) query.append('month', params.month.toString());
+        if (params.type) query.append('type', params.type);
+        if (params.subjectRif) query.append('subjectRif', params.subjectRif);
+        return this.requestWithholding<WithholdingListItem[]>(`?${query.toString()}`);
+    }
+
+    async getWithholdingById(id: number): Promise<WithholdingDetail> {
+        return this.requestWithholding<WithholdingDetail>(`/${id}`);
+    }
+
+    async annulWithholding(id: number): Promise<void> {
+        return this.requestWithholding<void>(`/${id}/annul`, {
+            method: 'PUT'
+        });
     }
 }
 

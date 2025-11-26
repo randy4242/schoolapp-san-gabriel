@@ -9,6 +9,7 @@ import ParentPaymentsModal from './ParentPaymentsModal';
 import ParentNotificationsModal from './ParentNotificationsModal';
 import UserRelationshipsModal from './UserRelationshipsModal';
 import UserDetailsModal from './UserDetailsModal';
+import Modal from '../../components/Modal';
 
 const UserListPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -22,12 +23,13 @@ const UserListPage: React.FC = () => {
   const [viewingNotificationsFor, setViewingNotificationsFor] = useState<User | null>(null);
   const [viewingRelationshipsFor, setViewingRelationshipsFor] = useState<User | null>(null);
   const [viewingDetailsFor, setViewingDetailsFor] = useState<User | null>(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   const { user, hasPermission } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   
-  const canCreateUser = useMemo(() => hasPermission([6]), [hasPermission]);
+  const canManageUsers = useMemo(() => hasPermission([6]), [hasPermission]);
 
   const fetchUsers = async () => {
     if (user?.schoolId) {
@@ -36,8 +38,8 @@ const UserListPage: React.FC = () => {
         const data = await apiService.getUsers(user.schoolId);
         setUsers(data);
         setError('');
-      } catch (err) {
-        setError('No se pudo cargar la lista de usuarios.');
+      } catch (err: any) {
+        setError(err.message || 'No se pudo cargar la lista de usuarios.');
         console.error(err);
       } finally {
         setLoading(false);
@@ -56,17 +58,24 @@ const UserListPage: React.FC = () => {
     }
   }, [location.state]);
 
-  const handleDelete = async (userId: number) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este usuario?')) {
-      try {
-        if (user?.schoolId) {
-          await apiService.deleteUser(userId, user.schoolId);
-          fetchUsers();
-        }
-      } catch (err) {
-        setError('Error al eliminar el usuario.');
-        console.error(err);
-      }
+  const confirmDelete = async () => {
+    if (!userToDelete) return;
+
+    const originalUsers = [...users];
+    
+    // Optimistic update: remove user from UI immediately
+    setUsers(prevUsers => prevUsers.filter(u => u.userID !== userToDelete.userID));
+    setError('');
+    setUserToDelete(null); // Close modal immediately
+
+    try {
+      await apiService.deleteUser(userToDelete.userID);
+      // On success, no need to refetch, UI is already updated.
+    } catch (err: any) {
+      // On failure, revert the state and show an error
+      setUsers(originalUsers);
+      setError(err.message || 'Ocurrió un error inesperado al eliminar el usuario.');
+      console.error("Delete user error:", err);
     }
   };
 
@@ -94,7 +103,7 @@ const UserListPage: React.FC = () => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-text-primary">Lista de Usuarios</h1>
-        {canCreateUser && (
+        {canManageUsers && (
           <Link to="/users/create" className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 transition-colors">
             Crear Usuario
           </Link>
@@ -120,9 +129,9 @@ const UserListPage: React.FC = () => {
       </div>
 
       {loading && <p>Cargando usuarios...</p>}
-      {error && <p className="text-danger">{error}</p>}
+      {error && <p className="text-danger bg-danger-light p-3 rounded mb-4">{error}</p>}
       
-      {!loading && !error && (
+      {!loading && (
         <div className="bg-surface shadow-md rounded-lg overflow-x-auto">
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-header">
@@ -149,11 +158,15 @@ const UserListPage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center flex-wrap gap-2">
-                        <Link to={`/users/edit/${u.userID}`} className="text-warning hover:text-warning-dark font-medium">Editar</Link>
-                        <button onClick={() => handleDelete(u.userID)} className="text-danger hover:text-danger-text">Eliminar</button>
-                        <button onClick={() => navigate(`/users/block/${u.userID}`)} className="text-secondary hover:text-primary flex items-center gap-1">
-                            <BlockIcon /> {u.isBlocked ? 'Desbloquear' : 'Bloquear'}
-                        </button>
+                        {canManageUsers && (
+                          <>
+                            <Link to={`/users/edit/${u.userID}`} className="text-warning hover:text-warning-dark font-medium">Editar</Link>
+                            <button onClick={() => setUserToDelete(u)} className="text-danger hover:text-danger-text">Eliminar</button>
+                            <button onClick={() => navigate(`/users/block/${u.userID}`)} className="text-secondary hover:text-primary flex items-center gap-1">
+                                <BlockIcon /> {u.isBlocked ? 'Desbloquear' : 'Bloquear'}
+                            </button>
+                          </>
+                        )}
                         {(isParentRole(u.roleID) || isStudentRole(u.roleID)) && (
                              <button onClick={() => setViewingRelationshipsFor(u)} className="text-info hover:text-info-dark flex items-center gap-1">
                                 <FamilyIcon /> Relaciones
@@ -181,6 +194,33 @@ const UserListPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+      )}
+      {userToDelete && (
+        <Modal isOpen={!!userToDelete} onClose={() => setUserToDelete(null)} title="Confirmar Eliminación">
+            <div>
+                <p className="text-text-primary">
+                    ¿Estás seguro de que quieres eliminar al usuario "<strong>{userToDelete.userName}</strong>"?
+                </p>
+                <p className="mt-2 text-sm text-text-secondary">
+                    Esta acción es irreversible y borrará todos sus datos relacionados, incluyendo historial de login, inscripciones y calificaciones.
+                </p>
+            </div>
+            <div className="flex justify-end space-x-4 pt-6 mt-4 border-t border-border">
+                <button 
+                    type="button" 
+                    onClick={() => setUserToDelete(null)}
+                    className="bg-background text-text-primary py-2 px-4 rounded hover:bg-border transition-colors"
+                >
+                    Cancelar
+                </button>
+                <button 
+                    onClick={confirmDelete}
+                    className="bg-danger text-text-on-primary py-2 px-4 rounded hover:bg-danger-dark transition-colors"
+                >
+                    Sí, Eliminar
+                </button>
+            </div>
+        </Modal>
       )}
       {viewingCoursesFor && (
           <TaughtCoursesModal
