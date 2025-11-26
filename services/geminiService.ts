@@ -1,5 +1,6 @@
+
 import { GoogleGenAI } from "@google/genai";
 
-const API_KEY = "AIzaSyCEWyx38AjgZ5ZSYqljEgLS2eE8xdQVtr4";
-
-export const geminiClient = new GoogleGenAI({ apiKey: API_KEY });
+// The API key is obtained exclusively from the environment variable.
+// Do not hardcode keys here to prevent leakage errors in production.
+export const geminiClient = new GoogleGenAI({ apiKey: process.env.API_KEY });

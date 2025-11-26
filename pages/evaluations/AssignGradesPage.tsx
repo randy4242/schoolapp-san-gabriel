@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray, Controller, SubmitHandler } from 'react-hook-form';
@@ -444,7 +445,7 @@ const AssignGradesPage: React.FC = () => {
         }
     };
 
-    // Keyboard Navigation Logic
+    // Keyboard Navigation Logic: Enter moves to next row's same input
     const handleKeyDown = (e: React.KeyboardEvent, index: number, type: 'value' | 'text' | 'comment') => {
         if (e.key === 'Enter') {
             e.preventDefault(); // Prevent form submission
