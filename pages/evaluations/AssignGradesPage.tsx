@@ -8,7 +8,7 @@ import { geminiClient } from '../../services/geminiService';
 import { useAuth } from '../../hooks/useAuth';
 import { Evaluation, User, Grade } from '../../types';
 import Modal from '../../components/Modal';
-import { CameraIcon, EyeIcon, SpinnerIcon, ClipboardCheckIcon, XIcon } from '../../components/icons';
+import { CameraIcon, EyeIcon, SpinnerIcon, ClipboardCheckIcon, XIcon, PlusIcon } from '../../components/icons';
 
 // --- Helper Components & Functions ---
 
@@ -77,6 +77,11 @@ const AssignGradesPage: React.FC = () => {
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
     const [aiAnalyzing, setAiAnalyzing] = useState(false);
     const [aiError, setAiError] = useState('');
+    
+    // AI Input States
+    const [aiTab, setAiTab] = useState<'files' | 'text'>('files');
+    const [aiFiles, setAiFiles] = useState<File[]>([]);
+    const [aiText, setAiText] = useState('');
     
     // New AI States for UI feedback
     const [aiWarnings, setAiWarnings] = useState<string[]>([]);
@@ -177,7 +182,7 @@ const AssignGradesPage: React.FC = () => {
                     const sheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[sheetName];
                     const csv = XLSX.utils.sheet_to_csv(worksheet);
-                    resolve(csv);
+                    resolve(`--- CONTENIDO DEL ARCHIVO: ${file.name} ---\n${csv}\n--- FIN DEL ARCHIVO ---`);
                 } catch (err) {
                     reject(err);
                 }
@@ -187,9 +192,26 @@ const AssignGradesPage: React.FC = () => {
         });
     };
 
-    const handleAiFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    const handleFilesSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            setAiFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
+        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const removeFile = (index: number) => {
+        setAiFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleAiAnalyze = async () => {
+        if (aiTab === 'files' && aiFiles.length === 0) {
+            setAiError("Por favor, seleccione al menos un archivo.");
+            return;
+        }
+        if (aiTab === 'text' && !aiText.trim()) {
+            setAiError("Por favor, ingrese el texto a analizar.");
+            return;
+        }
 
         setAiAnalyzing(true);
         setAiError('');
@@ -198,24 +220,32 @@ const AssignGradesPage: React.FC = () => {
 
         try {
             const modelId = 'gemini-2.5-flash';
-
-            let contentPart: any;
-            let promptText = "";
+            const promptParts: any[] = [];
             
-            const isSpreadsheet = file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv');
+            // 1. Build Prompt Parts
+            let textContext = "";
 
-            if (isSpreadsheet) {
-                 const csvData = await readExcelFile(file);
-                 contentPart = { text: `Datos extraídos del archivo:\n${csvData}` };
-                 promptText = `Analiza los datos de texto y extrae las calificaciones.`;
+            if (aiTab === 'files') {
+                for (const file of aiFiles) {
+                    const isSpreadsheet = file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv');
+                    if (isSpreadsheet) {
+                        const csvData = await readExcelFile(file);
+                        promptParts.push({ text: csvData });
+                    } else {
+                        // Image / PDF
+                        const imagePart = await fileToGenerativePart(file);
+                        promptParts.push(imagePart);
+                    }
+                }
+                textContext = "Analiza los documentos adjuntos (imágenes o datos de hojas de cálculo).";
             } else {
-                 // PDF or Image
-                 contentPart = await fileToGenerativePart(file);
-                 promptText = `Analiza este documento visualmente y extrae las calificaciones de los estudiantes.`;
+                // Text Mode
+                promptParts.push({ text: `TEXTO PROPORCIONADO POR EL USUARIO:\n${aiText}` });
+                textContext = "Analiza el texto proporcionado.";
             }
 
-            const prompt = `
-                ${promptText}
+            const systemPrompt = `
+                ${textContext}
                 Contexto: Estás extrayendo notas para una evaluación escolar.
                 
                 Extrae una lista de estudiantes con sus notas. Devuelve un JSON ARRAY.
@@ -229,14 +259,15 @@ const AssignGradesPage: React.FC = () => {
                 1. Si la nota es solo texto (A, B, C...), ponla en gradeText.
                 2. Si la nota es un número (0-20), ponla en gradeValue.
                 3. NO INVENTES DATOS.
+                4. Si hay múltiples archivos o secciones, combina todos los resultados en una sola lista.
             `;
+
+            // Prepend system prompt
+            promptParts.unshift({ text: systemPrompt });
 
             const response = await geminiClient.models.generateContent({
                 model: modelId,
-                contents: [
-                    { text: prompt },
-                    contentPart
-                ],
+                contents: promptParts,
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: {
@@ -260,7 +291,7 @@ const AssignGradesPage: React.FC = () => {
             
             // --- Advanced Matching Logic ---
             // Tokenize: split string into words, remove accents, lowercase
-            const tokenize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(w => w.length > 1); // Filter single chars to avoid noise
+            const tokenize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(w => w.length > 1); 
             
             const currentFields = getValues('grades');
             const notFoundNames: string[] = [];
@@ -274,10 +305,9 @@ const AssignGradesPage: React.FC = () => {
 
                 currentFields.forEach((field, index) => {
                     const fieldTokens = tokenize(field.userName);
-                    
                     // Calculate intersection count
                     const intersection = extractedTokens.filter(token => fieldTokens.includes(token));
-                    const score = intersection.length / Math.max(extractedTokens.length, 1); // Percentage of extracted words found in DB name
+                    const score = intersection.length / Math.max(extractedTokens.length, 1); 
 
                     if (score > maxScore) {
                         maxScore = score;
@@ -289,14 +319,12 @@ const AssignGradesPage: React.FC = () => {
 
                 // Thresholds logic
                 if (maxScore === 1 && bestMatchIndex !== -1) {
-                    // Perfect match (all words in extracted name appear in DB name)
-                    // Auto-apply
+                    // Perfect match
                     if (roundedGradeValue !== null) setValue(`grades.${bestMatchIndex}.gradeValue`, String(roundedGradeValue));
                     if (extracted.gradeText !== null) setValue(`grades.${bestMatchIndex}.gradeText`, extracted.gradeText);
-                    // Reset comments to empty string
                     setValue(`grades.${bestMatchIndex}.comments`, "");
                 } else if (maxScore >= 0.5 && bestMatchIndex !== -1) {
-                    // Partial match (some words match, likely correct but needs confirmation)
+                    // Partial match
                     matchesToConfirm.push({
                         extractedName: extracted.studentName,
                         targetIndex: bestMatchIndex,
@@ -316,10 +344,9 @@ const AssignGradesPage: React.FC = () => {
 
         } catch (err: any) {
             console.error("AI Error:", err);
-            setAiError("Error al analizar el documento. Asegúrate de que sea legible.");
+            setAiError("Error al analizar. Asegúrate de que los archivos/texto sean legibles.");
         } finally {
             setAiAnalyzing(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
@@ -417,6 +444,20 @@ const AssignGradesPage: React.FC = () => {
         }
     };
 
+    // Keyboard Navigation Logic
+    const handleKeyDown = (e: React.KeyboardEvent, index: number, type: 'value' | 'text' | 'comment') => {
+        if (e.key === 'Enter') {
+            e.preventDefault(); // Prevent form submission
+            const nextIndex = index + 1;
+            const nextInputId = `grade-${type}-${nextIndex}`;
+            const nextElement = document.getElementById(nextInputId);
+            if (nextElement) {
+                nextElement.focus();
+                // Optional: Select text in next input for easier overwriting
+                // (nextElement as HTMLInputElement).select(); 
+            }
+        }
+    };
 
     const onSubmit: SubmitHandler<FormValues> = async (data) => {
         if (!evaluationId || !user?.schoolId || !evaluation) {
@@ -486,7 +527,7 @@ const AssignGradesPage: React.FC = () => {
                 <div className="mb-6 border-l-4 border-danger bg-danger-light/20 p-4 rounded shadow-sm relative">
                     <button onClick={clearWarnings} className="absolute top-2 right-2 text-danger hover:text-danger-dark"><XIcon className="w-4 h-4"/></button>
                     <h3 className="font-bold text-danger text-lg mb-2">Advertencia: Estudiantes no encontrados</h3>
-                    <p className="text-sm text-text-secondary mb-2">Los siguientes nombres en el archivo no tuvieron coincidencia exacta con la lista de evaluación:</p>
+                    <p className="text-sm text-text-secondary mb-2">Los siguientes nombres detectados no tuvieron coincidencia exacta en la lista:</p>
                     <ul className="list-disc list-inside text-sm text-text-primary grid grid-cols-1 md:grid-cols-2 gap-1">
                         {aiWarnings.map((name, i) => <li key={i} className="truncate">{name}</li>)}
                     </ul>
@@ -505,7 +546,7 @@ const AssignGradesPage: React.FC = () => {
                             <div key={i} className="flex items-center justify-between bg-surface p-3 rounded border border-border shadow-sm">
                                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <span className="text-xs text-text-tertiary block">En Archivo:</span>
+                                        <span className="text-xs text-text-tertiary block">En Documento:</span>
                                         <span className="font-medium text-text-primary">{match.extractedName}</span>
                                     </div>
                                     <div>
@@ -553,12 +594,53 @@ const AssignGradesPage: React.FC = () => {
                                         {field.hasGrade && <span className="ml-2 text-xs font-semibold bg-success text-text-on-primary px-2 py-0.5 rounded-full">Cargada</span>}
                                     </td>
                                     {(gradeMode === 'numeric' || gradeMode === 'both') && (
-                                        <td className="px-4 py-2"><Controller name={`grades.${index}.gradeValue`} control={control} render={({ field }) => <input type="number" step="1" {...field} className="w-full p-2 bg-surface text-text-primary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-accent" />} /></td>
+                                        <td className="px-4 py-2">
+                                            <Controller 
+                                                name={`grades.${index}.gradeValue`} 
+                                                control={control} 
+                                                render={({ field }) => (
+                                                    <input 
+                                                        id={`grade-value-${index}`}
+                                                        type="number" 
+                                                        step="1" 
+                                                        {...field} 
+                                                        onKeyDown={(e) => handleKeyDown(e, index, 'value')}
+                                                        className="w-full p-2 bg-surface text-text-primary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-accent" 
+                                                    />
+                                                )} 
+                                            />
+                                        </td>
                                     )}
                                     {(gradeMode === 'text' || gradeMode === 'both') && (
-                                        <td className="px-4 py-2"><Controller name={`grades.${index}.gradeText`} control={control} render={({ field }) => <input {...field} className="w-full p-2 bg-surface text-text-primary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-accent" />} /></td>
+                                        <td className="px-4 py-2">
+                                            <Controller 
+                                                name={`grades.${index}.gradeText`} 
+                                                control={control} 
+                                                render={({ field }) => (
+                                                    <input 
+                                                        id={`grade-text-${index}`}
+                                                        {...field} 
+                                                        onKeyDown={(e) => handleKeyDown(e, index, 'text')}
+                                                        className="w-full p-2 bg-surface text-text-primary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-accent" 
+                                                    />
+                                                )} 
+                                            />
+                                        </td>
                                     )}
-                                    <td className="px-4 py-2"><Controller name={`grades.${index}.comments`} control={control} render={({ field }) => <input {...field} className="w-full p-2 bg-surface text-text-primary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-accent" />} /></td>
+                                    <td className="px-4 py-2">
+                                        <Controller 
+                                            name={`grades.${index}.comments`} 
+                                            control={control} 
+                                            render={({ field }) => (
+                                                <input 
+                                                    id={`grade-comment-${index}`}
+                                                    {...field} 
+                                                    onKeyDown={(e) => handleKeyDown(e, index, 'comment')}
+                                                    className="w-full p-2 bg-surface text-text-primary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-accent" 
+                                                />
+                                            )} 
+                                        />
+                                    </td>
                                     <td className="px-4 py-2">
                                         <div className="flex items-center space-x-2 h-10">
                                             {isUploading === field.userID ? (
@@ -593,48 +675,95 @@ const AssignGradesPage: React.FC = () => {
                 </div>
             </form>
 
+            {/* AI Import Modal */}
             {isAiModalOpen && (
                 <Modal isOpen={true} onClose={() => setIsAiModalOpen(false)} title="Importar Notas con IA">
                     <div className="p-4">
-                        <p className="text-text-secondary mb-4 text-sm">
-                            Sube una foto, PDF o archivo Excel con la lista de estudiantes y sus notas. La IA intentará hacer coincidir los nombres y rellenar los campos automáticamente.
-                        </p>
+                        <div className="flex border-b border-border mb-4">
+                            <button 
+                                className={`flex-1 py-2 text-center font-medium ${aiTab === 'files' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary hover:text-text-primary'}`}
+                                onClick={() => setAiTab('files')}
+                            >
+                                Subir Archivos
+                            </button>
+                            <button 
+                                className={`flex-1 py-2 text-center font-medium ${aiTab === 'text' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary hover:text-text-primary'}`}
+                                onClick={() => setAiTab('text')}
+                            >
+                                Pegar Texto
+                            </button>
+                        </div>
 
                         {aiError && <p className="bg-danger-light text-danger p-2 rounded mb-4 text-sm">{aiError}</p>}
                         
-                        <div 
-                            className={`border-2 border-dashed rounded-lg p-8 transition-colors text-center ${aiAnalyzing ? 'border-gray-300 bg-gray-50 cursor-wait' : 'border-primary/50 hover:bg-background cursor-pointer'}`}
-                            onClick={() => !aiAnalyzing && fileInputRef.current?.click()}
-                        >
-                            <input 
-                                type="file" 
-                                ref={fileInputRef} 
-                                className="hidden" 
-                                accept="image/*,application/pdf,.xlsx,.xls,.csv"
-                                onChange={handleAiFileChange}
-                                disabled={aiAnalyzing}
-                            />
-                            
-                            {aiAnalyzing ? (
-                                <div className="flex flex-col items-center justify-center text-primary">
-                                    <SpinnerIcon className="w-10 h-10 mb-2" />
-                                    <span className="font-bold">Analizando documento...</span>
+                        {aiTab === 'files' && (
+                            <div className="space-y-4">
+                                <p className="text-text-secondary text-sm">
+                                    Seleccione uno o varios archivos (Imágenes, Excel, PDF). La IA combinará la información.
+                                </p>
+                                <div 
+                                    className={`border-2 border-dashed rounded-lg p-6 transition-colors text-center ${aiAnalyzing ? 'border-gray-300 bg-gray-50 cursor-wait' : 'border-primary/50 hover:bg-background cursor-pointer'}`}
+                                    onClick={() => !aiAnalyzing && fileInputRef.current?.click()}
+                                >
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef} 
+                                        className="hidden" 
+                                        multiple 
+                                        accept=".png,.jpg,.jpeg,.pdf,.xlsx,.xls,.csv"
+                                        onChange={handleFilesSelect}
+                                        disabled={aiAnalyzing}
+                                    />
+                                    <div className="flex flex-col items-center text-text-tertiary hover:text-primary">
+                                        <span className="text-3xl mb-2">📂</span>
+                                        <span>Haz clic para seleccionar archivos</span>
+                                    </div>
                                 </div>
-                            ) : (
-                                <div className="flex flex-col items-center text-text-tertiary hover:text-primary">
-                                    <span className="text-4xl mb-2">📂</span>
-                                    <span>Haz clic para subir archivo</span>
-                                    <span className="text-xs mt-1">(Excel, PDF, Imagen)</span>
-                                </div>
-                            )}
-                        </div>
+                                
+                                {aiFiles.length > 0 && (
+                                    <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                                        {aiFiles.map((f, idx) => (
+                                            <div key={idx} className="flex justify-between items-center bg-background p-2 rounded text-sm border border-border">
+                                                <span className="truncate">{f.name}</span>
+                                                <button onClick={() => removeFile(idx)} className="text-danger hover:text-danger-dark ml-2 p-1">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
-                        <div className="mt-6 flex justify-end">
+                        {aiTab === 'text' && (
+                            <div>
+                                <p className="text-text-secondary text-sm mb-2">
+                                    Pegue aquí la lista de estudiantes y notas (desde Excel, Word, etc.).
+                                </p>
+                                <textarea
+                                    className="w-full p-3 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-accent/50 text-sm h-48"
+                                    placeholder="Ej: Juan Perez 18, Maria Gomez 20..."
+                                    value={aiText}
+                                    onChange={e => setAiText(e.target.value)}
+                                    disabled={aiAnalyzing}
+                                />
+                            </div>
+                        )}
+
+                        <div className="mt-6 flex justify-end gap-3">
                             <button 
                                 onClick={() => setIsAiModalOpen(false)}
                                 className="bg-background text-text-primary py-2 px-4 rounded hover:bg-border"
+                                disabled={aiAnalyzing}
                             >
-                                Cerrar
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={handleAiAnalyze}
+                                disabled={aiAnalyzing}
+                                className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-90 disabled:bg-secondary flex items-center"
+                            >
+                                {aiAnalyzing ? <><SpinnerIcon className="mr-2" /> Analizando...</> : "Procesar Datos"}
                             </button>
                         </div>
                     </div>

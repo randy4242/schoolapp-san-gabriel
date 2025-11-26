@@ -462,7 +462,7 @@ class ApiService {
         return this.request<Evaluation>(`api/evaluations/${id}?schoolId=${schoolId}`);
     }
 
-    async createEvaluation(evaluation: Omit<Evaluation, 'evaluationID' | 'course' | 'lapso'>): Promise<Evaluation> {
+    async createEvaluation(evaluation: Omit<Evaluation, 'evaluationID' | 'course' | 'lapso' | 'createdAt'>): Promise<Evaluation> {
         return this.request<Evaluation>('api/evaluations', {
             method: 'POST',
             body: JSON.stringify(evaluation),

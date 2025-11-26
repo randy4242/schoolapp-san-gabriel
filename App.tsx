@@ -1,9 +1,3 @@
-
-
-
-
-
-
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
@@ -23,6 +17,7 @@ import AssignStudentToClassroomPage from './pages/classrooms/AssignStudentToClas
 import SendNotificationPage from './pages/notifications/SendNotificationPage';
 import EvaluationListPage from './pages/evaluations/EvaluationListPage';
 import EvaluationFormPage from './pages/evaluations/EvaluationFormPage';
+import BulkEvaluationCreationPage from './pages/evaluations/BulkEvaluationCreationPage';
 import AssignGradesPage from './pages/evaluations/AssignGradesPage';
 import ReportPage from './pages/reports/ReportsPage';
 import ReportViewerPage from './pages/reports/ReportViewerPage';
@@ -118,6 +113,7 @@ const App: React.FC = () => {
             {/* Evaluations */}
             <Route path="evaluations" element={<EvaluationListPage />} />
             <Route path="evaluations/create" element={<EvaluationFormPage />} />
+            <Route path="evaluations/create-bulk-ia" element={<BulkEvaluationCreationPage />} />
             <Route path="evaluations/edit/:id" element={<EvaluationFormPage />} />
             <Route path="evaluations/assign/:evaluationId" element={<AssignGradesPage />} />
             <Route path="evaluations/assign-descriptive/:evaluationId" element={<AssignDescriptiveGradesPage />} />
