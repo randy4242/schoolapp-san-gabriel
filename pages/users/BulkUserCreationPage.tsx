@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Type } from "@google/genai";
@@ -6,7 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { apiService } from '../../services/apiService';
 import { geminiClient } from '../../services/geminiService';
 import { ROLES } from '../../types';
-import { SpinnerIcon, TrashIcon, UserCheckIcon, XIcon } from '../../components/icons';
+import { SpinnerIcon, UserCheckIcon, XIcon } from '../../components/icons';
 
 // Define the extracted data structure
 interface ExtractedUser {

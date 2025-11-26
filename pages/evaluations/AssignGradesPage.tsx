@@ -445,7 +445,7 @@ const AssignGradesPage: React.FC = () => {
         }
     };
 
-    // Keyboard Navigation Logic: Enter moves to next row's same input
+    // Keyboard Navigation Logic
     const handleKeyDown = (e: React.KeyboardEvent, index: number, type: 'value' | 'text' | 'comment') => {
         if (e.key === 'Enter') {
             e.preventDefault(); // Prevent form submission
