@@ -5,7 +5,7 @@ import { Type } from "@google/genai";
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../hooks/useAuth';
 import { apiService } from '../../services/apiService';
-import { geminiClient } from '../../services/geminiService';
+import { geminiService } from '../../services/geminiService';
 import { ROLES } from '../../types';
 import { SpinnerIcon, UserCheckIcon, XIcon } from '../../components/icons';
 
@@ -202,7 +202,7 @@ const BulkUserCreationPage: React.FC = () => {
                 Devuelve un JSON array puro.
             `;
 
-            const response = await geminiClient.models.generateContent({
+            const response = await geminiService.generateContent({
                 model: modelId,
                 contents: [
                     { text: prompt },

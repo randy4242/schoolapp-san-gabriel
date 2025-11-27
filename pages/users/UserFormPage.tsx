@@ -4,7 +4,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { Type } from "@google/genai";
 import { apiService } from '../../services/apiService';
-import { geminiClient } from '../../services/geminiService';
+import { geminiService } from '../../services/geminiService';
 import { useAuth } from '../../hooks/useAuth';
 import { User, ROLES } from '../../types';
 import { EyeIcon, EyeOffIcon, CameraIcon, SpinnerIcon } from '../../components/icons';
@@ -99,7 +99,7 @@ const UserFormPage: React.FC = () => {
               Si un campo no está presente, devuélvelo como string vacío "". No inventes datos.
           `;
 
-          const response = await geminiClient.models.generateContent({
+          const response = await geminiService.generateContent({
               model: modelId,
               contents: [
                   { text: prompt },

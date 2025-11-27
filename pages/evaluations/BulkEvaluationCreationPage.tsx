@@ -5,7 +5,7 @@ import { Type } from "@google/genai";
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../hooks/useAuth';
 import { apiService } from '../../services/apiService';
-import { geminiClient } from '../../services/geminiService';
+import { geminiService } from '../../services/geminiService';
 import { Course, Evaluation } from '../../types';
 import { SpinnerIcon, TrashIcon, ClipboardCheckIcon, XIcon, PlusIcon, BookOpenIcon } from '../../components/icons';
 
@@ -184,7 +184,7 @@ const BulkEvaluationCreationPage: React.FC = () => {
             // Prepend prompt text
             contents.unshift({ text: prompt });
 
-            const response = await geminiClient.models.generateContent({
+            const response = await geminiService.generateContent({
                 model: modelId,
                 contents: contents,
                 config: {

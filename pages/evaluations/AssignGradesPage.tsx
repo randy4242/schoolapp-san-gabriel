@@ -5,7 +5,7 @@ import { useForm, useFieldArray, Controller, SubmitHandler } from 'react-hook-fo
 import { Type } from "@google/genai";
 import * as XLSX from 'xlsx';
 import { apiService } from '../../services/apiService';
-import { geminiClient } from '../../services/geminiService';
+import { geminiService } from '../../services/geminiService';
 import { useAuth } from '../../hooks/useAuth';
 import { Evaluation, User, Grade } from '../../types';
 import Modal from '../../components/Modal';
@@ -266,7 +266,7 @@ const AssignGradesPage: React.FC = () => {
             // Prepend system prompt
             promptParts.unshift({ text: systemPrompt });
 
-            const response = await geminiClient.models.generateContent({
+            const response = await geminiService.generateContent({
                 model: modelId,
                 contents: promptParts,
                 config: {

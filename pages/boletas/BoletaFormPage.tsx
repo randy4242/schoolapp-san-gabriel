@@ -33,17 +33,33 @@ const determineBoletaLevel = (classroomName: string | undefined | null): string 
     const name = classroomName.toLowerCase();
 
     // Preschool levels
-    if (/(nivel\s*1|primer\s*nivel|1er\s*nivel|sala\s*1)/.test(name)) return "Sala 1";
-    if (/(nivel\s*2|segundo\s*nivel|2do\s*nivel|sala\s*2)/.test(name)) return "Sala 2";
-    if (/(nivel\s*3|tercer\s*nivel|3er\s*nivel|sala\s*3)/.test(name)) return "Sala 3";
+    // Matches: "nivel 1", "sala 1", "i nivel", "primer nivel", "1er nivel", "1 er nivel"
+    if (/(nivel\s*1|sala\s*1|\bi\s+nivel|primer\s*nivel|1\s*er\s*nivel)/.test(name)) return "Sala 1";
+    
+    // Matches: "nivel 2", "sala 2", "ii nivel", "segundo nivel", "2do nivel", "2 do nivel"
+    if (/(nivel\s*2|sala\s*2|\bii\s+nivel|segundo\s*nivel|2\s*do\s*nivel)/.test(name)) return "Sala 2";
+    
+    // Matches: "nivel 3", "sala 3", "iii nivel", "tercer nivel", "3er nivel", "3 er nivel"
+    if (/(nivel\s*3|sala\s*3|\biii\s+nivel|tercer\s*nivel|3\s*er\s*nivel)/.test(name)) return "Sala 3";
 
     // Primary levels
-    if (/(primer\s*grado|1er\s*grado)/.test(name)) return "Primer Grado";
-    if (/(segundo\s*grado|2do\s*grado)/.test(name)) return "Segundo Grado";
-    if (/(tercer\s*grado|3er\s*grado)/.test(name)) return "Tercer Grado";
-    if (/(cuarto\s*grado|4to\s*grado)/.test(name)) return "Cuarto Grado";
-    if (/(quinto\s*grado|5to\s*grado)/.test(name)) return "Quinto Grado";
-    if (/(sexto\s*grado|6to\s*grado)/.test(name)) return "Sexto Grado";
+    // Matches: "primer grado", "1er grado", "1 er grado"
+    if (/(primer\s*grado|1\s*er\s*grado)/.test(name)) return "Primer Grado";
+    
+    // Matches: "segundo grado", "2do grado", "2 do grado"
+    if (/(segundo\s*grado|2\s*do\s*grado)/.test(name)) return "Segundo Grado";
+    
+    // Matches: "tercer grado", "3er grado", "3 er grado"
+    if (/(tercer\s*grado|3\s*er\s*grado)/.test(name)) return "Tercer Grado";
+    
+    // Matches: "cuarto grado", "4to grado", "4 to grado"
+    if (/(cuarto\s*grado|4\s*to\s*grado)/.test(name)) return "Cuarto Grado";
+    
+    // Matches: "quinto grado", "5to grado", "5 to grado"
+    if (/(quinto\s*grado|5\s*to\s*grado)/.test(name)) return "Quinto Grado";
+    
+    // Matches: "sexto grado", "6to grado", "6 to grado"
+    if (/(sexto\s*grado|6\s*to\s*grado)/.test(name)) return "Sexto Grado";
     
     return null;
 };
