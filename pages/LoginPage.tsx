@@ -98,7 +98,7 @@ const LoginPage: React.FC = () => {
                 type="text"
                 value={emailOrUserName}
                 onChange={(e) => setEmailOrUserName(e.target.value)}
-                className="shadow appearance-none border border-login-inputBorder rounded w-full py-2 px-3 text-text-primary bg-login-inputBg leading-tight focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-colors"
+                className="shadow appearance-none border border-login-inputBorder rounded w-full py-2 px-3 text-text-secondary bg-login-inputBg leading-tight focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-colors"
                 required
               />
             </div>
@@ -110,7 +110,7 @@ const LoginPage: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="shadow appearance-none border border-login-inputBorder rounded w-full py-2 pl-3 pr-10 text-text-primary bg-login-inputBg leading-tight focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-colors"
+                  className="shadow appearance-none border border-login-inputBorder rounded w-full py-2 pl-3 pr-10 text-text-secondary bg-login-inputBg leading-tight focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-colors"
                   required
                 />
                 <button
