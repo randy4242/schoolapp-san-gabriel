@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -42,6 +41,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 
   const allowedSchoolsForBoletas = [5, 6, 7, 8, 9];
   const canViewBoletas = user && allowedSchoolsForBoletas.includes(user.schoolId);
+
+  const lapsoLabel = user && [6, 7, 8, 9].includes(user.schoolId) ? 'Momentos' : 'Lapsos';
 
   const navSections: NavSection[] = [
     {
@@ -128,7 +129,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   ];
   
   const singleLinks: (NavLink & { permission: (has: (roles: number[]) => boolean) => boolean })[] = [
-      { to: '/lapsos', label: 'Lapsos', icon: <CalendarIcon />, permission: (has) => has([6]) },
+      { to: '/lapsos', label: lapsoLabel, icon: <CalendarIcon />, permission: (has) => has([6]) },
       { to: '/courses', label: 'Horario', icon: <HistoryIcon />, permission: (has) => has([2, 9, 10]) && !has([6, 7]) },
       { to: '/attendance', label: 'Asistencia', icon: <ClipboardListIcon />, permission: (has) => has([6, 2, 9, 10]) },
       { to: '/relationships', label: 'Relaciones', icon: <LinkIcon />, permission: (has) => has([6]) },

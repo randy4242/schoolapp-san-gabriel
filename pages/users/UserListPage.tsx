@@ -1,9 +1,11 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
 import { User, ROLES } from '../../types';
-import { BellIcon, BlockIcon, BookOpenIcon, CreditCardIcon, FamilyIcon } from '../../components/icons';
+import { BellIcon, BlockIcon, BookOpenIcon, CreditCardIcon, FamilyIcon, DocumentTextIcon, ShoppingCartIcon } from '../../components/icons';
 import TaughtCoursesModal from './TaughtCoursesModal';
 import ParentPaymentsModal from './ParentPaymentsModal';
 import ParentNotificationsModal from './ParentNotificationsModal';
@@ -13,6 +15,7 @@ import Modal from '../../components/Modal';
 
 const UserListPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
+  const [schoolName, setSchoolName] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,6 +28,10 @@ const UserListPage: React.FC = () => {
   const [viewingDetailsFor, setViewingDetailsFor] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
+  // Print Modal States
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [selectedPrintRoles, setSelectedPrintRoles] = useState<number[]>([]);
+
   const { user, hasPermission } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -35,8 +42,14 @@ const UserListPage: React.FC = () => {
     if (user?.schoolId) {
       try {
         setLoading(true);
-        const data = await apiService.getUsers(user.schoolId);
-        setUsers(data);
+        const [usersData, schoolData] = await Promise.all([
+            apiService.getUsers(user.schoolId),
+            apiService.getSchoolName(user.schoolId)
+        ]);
+        setUsers(usersData);
+        setSchoolName(schoolData);
+        // Initialize print roles with empty
+        setSelectedPrintRoles([]);
         setError('');
       } catch (err: any) {
         setError(err.message || 'No se pudo cargar la lista de usuarios.');
@@ -91,6 +104,97 @@ const UserListPage: React.FC = () => {
     });
   }, [users, searchTerm, roleFilter]);
 
+  // --- Print Logic ---
+
+  const handleOpenPrintModal = () => {
+      // Initialize with NO roles selected by default (optimization)
+      setSelectedPrintRoles([]);
+      setIsPrintModalOpen(true);
+  };
+
+  const togglePrintRole = (roleId: number) => {
+      setSelectedPrintRoles(prev => 
+          prev.includes(roleId) ? prev.filter(id => id !== roleId) : [...prev, roleId]
+      );
+  };
+
+  const selectAllRoles = () => {
+      setSelectedPrintRoles(ROLES.map(r => r.id));
+  };
+
+  const deselectAllRoles = () => {
+      setSelectedPrintRoles([]);
+  };
+
+  // This function is computationally expensive, so we only call it on final action, not render
+  const getFilteredUsersForReport = () => {
+      return users
+          .filter(u => selectedPrintRoles.includes(u.roleID))
+          .sort((a, b) => {
+              // Sort by Role first, then Name
+              if (a.roleID !== b.roleID) return a.roleID - b.roleID;
+              return a.userName.localeCompare(b.userName);
+          });
+  };
+
+  const handleGeneratePdf = () => {
+      const reportData = getFilteredUsersForReport();
+      if (reportData.length === 0) {
+          alert("No hay usuarios seleccionados para imprimir. Por favor seleccione al menos un rol.");
+          return;
+      }
+      
+      setIsPrintModalOpen(false);
+      navigate('/report-viewer', { 
+          state: { 
+              reportData: reportData, 
+              reportType: 'user-list',
+              schoolName: schoolName 
+          } 
+      });
+  };
+
+  const handleGenerateExcel = () => {
+      const reportData = getFilteredUsersForReport();
+      if (reportData.length === 0) {
+          alert("No hay usuarios seleccionados para exportar. Por favor seleccione al menos un rol.");
+          return;
+      }
+
+      // Format data for Excel
+      const excelData = reportData.map((u, index) => ({
+          "No.": index + 1,
+          "Nombre Completo": u.userName,
+          "Cédula": u.cedula || 'N/A',
+          "Correo Electrónico": u.email,
+          "Teléfono": u.phoneNumber || 'N/A',
+          "Rol": getRoleName(u.roleID),
+          "Estado": u.isBlocked ? 'Bloqueado' : 'Activo'
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      
+      // Auto-width columns
+      const wscols = [
+          { wch: 5 },  // No
+          { wch: 30 }, // Nombre
+          { wch: 15 }, // Cedula
+          { wch: 30 }, // Email
+          { wch: 15 }, // Telefono
+          { wch: 15 }, // Rol
+          { wch: 10 }, // Estado
+      ];
+      worksheet['!cols'] = wscols;
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Lista de Usuarios");
+      
+      const fileName = `Lista_Usuarios_${schoolName.replace(/[^a-z0-9]/gi, '_')}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+      
+      setIsPrintModalOpen(false);
+  };
+
   const getRoleName = (roleId: number) => {
     return ROLES.find(r => r.id === roleId)?.name || 'Desconocido';
   };
@@ -104,9 +208,18 @@ const UserListPage: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-text-primary">Lista de Usuarios</h1>
         {canManageUsers && (
-          <Link to="/users/create" className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 transition-colors">
-            Crear Usuario
-          </Link>
+          <div className="space-x-2">
+              <button 
+                onClick={handleOpenPrintModal} 
+                className="bg-info text-text-on-primary py-2 px-4 rounded hover:bg-info-dark transition-colors inline-flex items-center"
+                title="Configurar impresión o exportación"
+              >
+                <DocumentTextIcon className="w-5 h-5 mr-1"/> Imprimir Lista
+              </button>
+              <Link to="/users/create" className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 transition-colors">
+                Crear Usuario
+              </Link>
+          </div>
         )}
       </div>
 
@@ -195,6 +308,65 @@ const UserListPage: React.FC = () => {
           </table>
         </div>
       )}
+
+      {/* --- Print Configuration Modal --- */}
+      {isPrintModalOpen && (
+          <Modal isOpen={true} onClose={() => setIsPrintModalOpen(false)} title="Configurar Impresión / Exportación">
+              <div>
+                  <p className="mb-4 text-text-secondary">Seleccione los roles que desea incluir en el reporte:</p>
+                  
+                  <div className="mb-4 flex gap-4">
+                      <button 
+                          onClick={selectAllRoles} 
+                          className="text-sm text-primary hover:underline font-medium"
+                      >
+                          Seleccionar Todos
+                      </button>
+                      <button 
+                          onClick={deselectAllRoles} 
+                          className="text-sm text-secondary hover:underline font-medium"
+                      >
+                          Deseleccionar Todos
+                      </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto mb-6 border p-3 rounded">
+                      {ROLES.map(role => (
+                          <label key={role.id} className="flex items-center space-x-2 cursor-pointer p-1 hover:bg-background rounded">
+                              <input 
+                                  type="checkbox" 
+                                  checked={selectedPrintRoles.includes(role.id)} 
+                                  onChange={() => togglePrintRole(role.id)}
+                                  className="h-4 w-4 rounded border-border text-primary focus:ring-accent"
+                              />
+                              <span className="text-text-primary text-sm">{role.name}</span>
+                          </label>
+                      ))}
+                  </div>
+
+                  <div className="flex justify-between items-center pt-4 border-t mt-2">
+                      <div className="text-xs text-text-tertiary">
+                          {selectedPrintRoles.length} roles seleccionados.
+                      </div>
+                      <div className="space-x-2 flex">
+                          <button 
+                              onClick={handleGenerateExcel} 
+                              className="bg-success text-text-on-primary py-2 px-4 rounded hover:bg-success-text transition-colors flex items-center"
+                          >
+                              <span className="mr-1">📊</span> Exportar Excel
+                          </button>
+                          <button 
+                              onClick={handleGeneratePdf} 
+                              className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 transition-colors flex items-center"
+                          >
+                              <DocumentTextIcon className="w-4 h-4 mr-1"/> Imprimir PDF
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </Modal>
+      )}
+
       {userToDelete && (
         <Modal isOpen={!!userToDelete} onClose={() => setUserToDelete(null)} title="Confirmar Eliminación">
             <div>

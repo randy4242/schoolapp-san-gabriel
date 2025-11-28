@@ -65,6 +65,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import ProfilePage from './pages/profile/ProfilePage';
 import NotificationListPage from './pages/notifications/NotificationListPage';
 import AssignDescriptiveGradesPage from './pages/evaluations/AssignDescriptiveGradesPage';
+import AiEvaluationPage from './pages/evaluations/AiEvaluationPage';
 
 const App: React.FC = () => {
   const { user, loading } = useAuth();
@@ -117,6 +118,7 @@ const App: React.FC = () => {
             <Route path="evaluations/edit/:id" element={<EvaluationFormPage />} />
             <Route path="evaluations/assign/:evaluationId" element={<AssignGradesPage />} />
             <Route path="evaluations/assign-descriptive/:evaluationId" element={<AssignDescriptiveGradesPage />} />
+            <Route path="evaluations/evaluate-ai/:evaluationId" element={<AiEvaluationPage />} />
             
             {/* Notifications */}
             <Route path="notifications/send" element={<SendNotificationPage />} />

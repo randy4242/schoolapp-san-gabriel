@@ -7,14 +7,15 @@ import ResumenFinalPrimariaReport from './ResumenFinalPrimariaReport';
 import CertificateTemplate from '../certificates/CertificateTemplate';
 import DescriptiveGradeReport from './DescriptiveGradeReport';
 import BoletaReport from './BoletaReport';
+import UserListReport from './UserListReport';
 
 const ReportViewerPage: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    const { reportData, reportType, classroom, student, evaluation, grade } = location.state || {};
+    const { reportData, reportType, classroom, student, evaluation, grade, schoolName } = location.state || {};
     const templateRef = React.useRef<HTMLDivElement>(null);
 
-    if (!reportData && reportType !== 'descriptive-grade') {
+    if (!reportData && reportType !== 'descriptive-grade' && reportType !== 'user-list') {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-background p-8">
                 <div className="bg-surface p-8 rounded-lg shadow-md text-center">
@@ -40,6 +41,9 @@ const ReportViewerPage: React.FC = () => {
             case 'certificate':
                 navigate('/certificates');
                 break;
+            case 'user-list':
+                navigate('/users');
+                break;
             case 'resumen':
             case 'resumen_primaria':
             case 'certificado':
@@ -56,7 +60,7 @@ const ReportViewerPage: React.FC = () => {
             <style>{`
                 @media print {
                     @page {
-                        size: A4;
+                        size: ${reportType === 'user-list' ? 'landscape' : 'auto'};
                         margin: 0;
                     }
                     body * {
@@ -93,13 +97,14 @@ const ReportViewerPage: React.FC = () => {
                 </div>
             </div>
 
-            <div id="print-section" className="print-container bg-surface shadow-lg mx-auto" style={{ width: '210mm' }}>
+            <div id="print-section" className="print-container bg-surface shadow-lg mx-auto" style={{ width: reportType === 'user-list' ? '297mm' : '210mm' }}>
                 {reportType === 'certificado' && <CertificadoTemplate reportData={reportData} student={student} templateRef={templateRef} />}
                 {reportType === 'resumen' && <ResumenFinalEmgReport data={reportData} classroom={classroom} templateRef={templateRef} />}
                 {reportType === 'resumen_primaria' && <ResumenFinalPrimariaReport data={reportData} templateRef={templateRef} />}
                 {reportType === 'certificate' && <CertificateTemplate data={reportData} templateRef={templateRef} />}
                 {reportType === 'descriptive-grade' && <DescriptiveGradeReport student={student} evaluation={evaluation} grade={grade} templateRef={templateRef} />}
                 {reportType === 'boleta' && <BoletaReport data={reportData} templateRef={templateRef} />}
+                {reportType === 'user-list' && <UserListReport users={reportData} schoolName={schoolName} templateRef={templateRef} />}
             </div>
         </div>
     );

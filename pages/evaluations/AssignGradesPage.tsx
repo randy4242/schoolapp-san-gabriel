@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray, Controller, SubmitHandler } from 'react-hook-form';
@@ -9,7 +8,7 @@ import { geminiService } from '../../services/geminiService';
 import { useAuth } from '../../hooks/useAuth';
 import { Evaluation, User, Grade } from '../../types';
 import Modal from '../../components/Modal';
-import { CameraIcon, EyeIcon, SpinnerIcon, ClipboardCheckIcon, XIcon, PlusIcon } from '../../components/icons';
+import { CameraIcon, EyeIcon, SpinnerIcon, ClipboardCheckIcon, XIcon, PlusIcon, BeakerIcon } from '../../components/icons';
 
 // --- Helper Components & Functions ---
 
@@ -514,13 +513,22 @@ const AssignGradesPage: React.FC = () => {
                         Evaluación: <span className="font-semibold text-info-dark">{evaluation?.title}</span>
                     </h2>
                 </div>
-                <button 
-                    type="button"
-                    onClick={() => setIsAiModalOpen(true)}
-                    className="bg-accent text-text-on-accent px-4 py-2 rounded-md hover:bg-accent/90 flex items-center gap-2 font-semibold shadow-sm"
-                >
-                    <ClipboardCheckIcon /> Importar Notas con IA
-                </button>
+                <div className="flex gap-2">
+                    <button 
+                        type="button"
+                        onClick={() => setIsAiModalOpen(true)}
+                        className="bg-accent text-text-on-accent px-4 py-2 rounded-md hover:bg-accent/90 flex items-center gap-2 font-semibold shadow-sm"
+                    >
+                        <ClipboardCheckIcon /> Importar con IA
+                    </button>
+                    <button 
+                        type="button"
+                        onClick={() => navigate(`/evaluations/evaluate-ai/${evaluationId}`)}
+                        className="bg-info text-white px-4 py-2 rounded-md hover:bg-info-dark flex items-center gap-2 font-semibold shadow-sm"
+                    >
+                        <BeakerIcon /> Evaluar con IA
+                    </button>
+                </div>
             </div>
 
             {/* AI Feedback Sections */}
