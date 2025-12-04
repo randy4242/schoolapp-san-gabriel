@@ -106,18 +106,59 @@ const AssignGradesPage: React.FC = () => {
             try {
                 setLoading(true);
                 const evalId = parseInt(evaluationId);
-                const [evalData, studentData, gradeData] = await Promise.all([
-                    apiService.getEvaluationById(evalId, user.schoolId),
-                    apiService.getStudentsForEvaluation(evalId),
-                    apiService.getGradesForEvaluation(evalId, user.schoolId)
-                ]);
-
+                
+                // 1. Fetch Evaluation first
+                const evalData = await apiService.getEvaluationById(evalId, user.schoolId);
                 setEvaluation(evalData);
+
+                // Robustness: Resolve Classroom ID
+                // If evaluation doesn't have it, try to get it from the Course
+                let targetClassroomId = evalData.classroomID;
+                if (!targetClassroomId && evalData.courseID) {
+                    try {
+                        const courseData = await apiService.getCourseById(evalData.courseID, user.schoolId);
+                        if (courseData.classroomID) {
+                            targetClassroomId = courseData.classroomID;
+                        }
+                    } catch (e) {
+                        console.warn("Could not fetch course details for fallback classroom ID");
+                    }
+                }
+
+                // 2. Fetch Students with Fallback
+                let studentData: User[] = [];
+                try {
+                    studentData = await apiService.getStudentsForEvaluation(evalId);
+                } catch (err: any) {
+                    // Ignore 404 from primary fetch if we have a fallback
+                    console.warn("Primary student fetch failed, trying fallback...", err.message);
+                    
+                    if (targetClassroomId) {
+                        try {
+                            studentData = await apiService.getStudentsByClassroom(targetClassroomId, user.schoolId);
+                        } catch (fallbackErr: any) {
+                             if (fallbackErr.message && (fallbackErr.message.includes("No se encontraron") || fallbackErr.message.includes("Not Found"))) {
+                                studentData = [];
+                            } else {
+                                throw new Error(fallbackErr.message || "No se pudieron cargar los estudiantes del salón.");
+                            }
+                        }
+                    } else {
+                        if (err.message && (err.message.includes("No se encontraron") || err.message.includes("Not Found"))) {
+                            studentData = [];
+                        } else {
+                            throw err;
+                        }
+                    }
+                }
+
+                // 3. Fetch Grades
+                const gradeData = await apiService.getGradesForEvaluation(evalId, user.schoolId).catch(() => []);
                 
                 let classroomName = '';
-                if (evalData.classroomID) {
+                if (targetClassroomId) {
                     try {
-                        const classroomData = await apiService.getClassroomById(evalData.classroomID, user.schoolId);
+                        const classroomData = await apiService.getClassroomById(targetClassroomId, user.schoolId);
                         classroomName = classroomData.name.toLowerCase();
                     } catch (e) { console.warn("Could not fetch classroom name", e); }
                 }
@@ -127,7 +168,9 @@ const AssignGradesPage: React.FC = () => {
                 else setGradeMode('both');
                 
                 studentData.sort((a, b) => a.userName.localeCompare(b.userName));
-                const gradeMap = new Map(gradeData.map(g => [g.userID, g]));
+                
+                const gradeMap = new Map<number, Grade>();
+                gradeData.forEach(g => gradeMap.set(g.userID, g));
 
                 const studentGradeData = studentData.map(student => {
                     const existingGrade = gradeMap.get(student.userID);
@@ -145,8 +188,8 @@ const AssignGradesPage: React.FC = () => {
                 
                 replace(studentGradeData);
 
-            } catch (err) {
-                setError('No se pudo cargar la información para asignar notas.');
+            } catch (err: any) {
+                setError(err.message || 'No se pudo cargar la información para asignar notas.');
                 console.error(err);
             } finally {
                 setLoading(false);
@@ -453,8 +496,6 @@ const AssignGradesPage: React.FC = () => {
             const nextElement = document.getElementById(nextInputId);
             if (nextElement) {
                 nextElement.focus();
-                // Optional: Select text in next input for easier overwriting
-                // (nextElement as HTMLInputElement).select(); 
             }
         }
     };
@@ -494,7 +535,7 @@ const AssignGradesPage: React.FC = () => {
     };
     
     if (loading) return <p>Cargando estudiantes y notas...</p>;
-    if (error && !saving) return <p className="text-danger bg-danger-light p-2 rounded">{error}</p>;
+    if (error) return <p className="text-danger bg-danger-light p-2 rounded">{error}</p>;
 
     return (
         <div className="bg-surface p-8 rounded-lg shadow-md">
@@ -584,97 +625,104 @@ const AssignGradesPage: React.FC = () => {
             )}
             
             <form onSubmit={handleSubmit(onSubmit)}>
-                <div className="overflow-x-auto border border-border rounded-lg">
-                    <table className="min-w-full divide-y divide-border">
-                        <thead className="bg-header">
-                            <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Estudiante</th>
-                                {(gradeMode === 'numeric' || gradeMode === 'both') && <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase w-32">Nota Num.</th>}
-                                {(gradeMode === 'text' || gradeMode === 'both') && <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase w-32">Nota Txt.</th>}
-                                <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Comentarios</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase w-24">Imagen</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-surface divide-y divide-border">
-                            {fields.map((field, index) => (
-                                <tr key={field.id} className={field.hasGrade ? 'bg-success-light/30' : ''}>
-                                    <td className="px-4 py-2 whitespace-nowrap font-medium">
-                                        {field.userName}
-                                        {field.hasGrade && <span className="ml-2 text-xs font-semibold bg-success text-text-on-primary px-2 py-0.5 rounded-full">Cargada</span>}
-                                    </td>
-                                    {(gradeMode === 'numeric' || gradeMode === 'both') && (
-                                        <td className="px-4 py-2">
-                                            <Controller 
-                                                name={`grades.${index}.gradeValue`} 
-                                                control={control} 
-                                                render={({ field }) => (
-                                                    <input 
-                                                        id={`grade-value-${index}`}
-                                                        type="number" 
-                                                        step="1" 
-                                                        {...field} 
-                                                        onKeyDown={(e) => handleKeyDown(e, index, 'value')}
-                                                        className="w-full p-2 bg-surface text-text-primary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-accent" 
-                                                    />
-                                                )} 
-                                            />
-                                        </td>
-                                    )}
-                                    {(gradeMode === 'text' || gradeMode === 'both') && (
-                                        <td className="px-4 py-2">
-                                            <Controller 
-                                                name={`grades.${index}.gradeText`} 
-                                                control={control} 
-                                                render={({ field }) => (
-                                                    <input 
-                                                        id={`grade-text-${index}`}
-                                                        {...field} 
-                                                        onKeyDown={(e) => handleKeyDown(e, index, 'text')}
-                                                        className="w-full p-2 bg-surface text-text-primary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-accent" 
-                                                    />
-                                                )} 
-                                            />
-                                        </td>
-                                    )}
-                                    <td className="px-4 py-2">
-                                        <Controller 
-                                            name={`grades.${index}.comments`} 
-                                            control={control} 
-                                            render={({ field }) => (
-                                                <input 
-                                                    id={`grade-comment-${index}`}
-                                                    {...field} 
-                                                    onKeyDown={(e) => handleKeyDown(e, index, 'comment')}
-                                                    className="w-full p-2 bg-surface text-text-primary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-accent" 
-                                                />
-                                            )} 
-                                        />
-                                    </td>
-                                    <td className="px-4 py-2">
-                                        <div className="flex items-center space-x-2 h-10">
-                                            {isUploading === field.userID ? (
-                                                <SpinnerIcon className="text-primary" />
-                                            ) : (
-                                                <>
-                                                    {field.hasImage && (
-                                                        <button type="button" onClick={() => handleViewImage(index)} className="cursor-pointer text-info hover:text-info-dark p-2 rounded-full hover:bg-background" title="Ver imagen">
-                                                            <EyeIcon />
-                                                        </button>
-                                                    )}
-                                                    
-                                                    <input type="file" accept="image/*" id={`image-upload-${index}`} className="hidden" onChange={(e) => handleImageUpload(e, index)} />
-                                                    <label htmlFor={`image-upload-${index}`} className="cursor-pointer text-secondary hover:text-primary p-2 rounded-full hover:bg-background" title={field.hasImage ? "Reemplazar imagen" : "Subir imagen"}>
-                                                        <CameraIcon />
-                                                    </label>
-                                                </>
-                                            )}
-                                        </div>
-                                    </td>
+                {fields.length === 0 ? (
+                    <div className="bg-warning/20 text-warning-dark p-4 rounded-md mb-6">
+                        No se encontraron estudiantes asociados a esta evaluación o al salón del curso. 
+                        Por favor, verifique que el curso tenga un salón asignado y que el salón tenga estudiantes.
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto border border-border rounded-lg">
+                        <table className="min-w-full divide-y divide-border">
+                            <thead className="bg-header">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Estudiante</th>
+                                    {(gradeMode === 'numeric' || gradeMode === 'both') && <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase w-32">Nota Num.</th>}
+                                    {(gradeMode === 'text' || gradeMode === 'both') && <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase w-32">Nota Txt.</th>}
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Comentarios</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-text-on-primary uppercase w-24">Imagen</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody className="bg-surface divide-y divide-border">
+                                {fields.map((field, index) => (
+                                    <tr key={field.id} className={field.hasGrade ? 'bg-success-light/30' : ''}>
+                                        <td className="px-4 py-2 whitespace-nowrap font-medium">
+                                            {field.userName}
+                                            {field.hasGrade && <span className="ml-2 text-xs font-semibold bg-success text-text-on-primary px-2 py-0.5 rounded-full">Cargada</span>}
+                                        </td>
+                                        {(gradeMode === 'numeric' || gradeMode === 'both') && (
+                                            <td className="px-4 py-2">
+                                                <Controller 
+                                                    name={`grades.${index}.gradeValue`} 
+                                                    control={control} 
+                                                    render={({ field }) => (
+                                                        <input 
+                                                            id={`grade-value-${index}`}
+                                                            type="number" 
+                                                            step="1" 
+                                                            {...field} 
+                                                            onKeyDown={(e) => handleKeyDown(e, index, 'value')}
+                                                            className="w-full p-2 bg-surface text-text-primary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-accent" 
+                                                        />
+                                                    )} 
+                                                />
+                                            </td>
+                                        )}
+                                        {(gradeMode === 'text' || gradeMode === 'both') && (
+                                            <td className="px-4 py-2">
+                                                <Controller 
+                                                    name={`grades.${index}.gradeText`} 
+                                                    control={control} 
+                                                    render={({ field }) => (
+                                                        <input 
+                                                            id={`grade-text-${index}`}
+                                                            {...field} 
+                                                            onKeyDown={(e) => handleKeyDown(e, index, 'text')}
+                                                            className="w-full p-2 bg-surface text-text-primary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-accent" 
+                                                        />
+                                                    )} 
+                                                />
+                                            </td>
+                                        )}
+                                        <td className="px-4 py-2">
+                                            <Controller 
+                                                name={`grades.${index}.comments`} 
+                                                control={control} 
+                                                render={({ field }) => (
+                                                    <input 
+                                                        id={`grade-comment-${index}`}
+                                                        {...field} 
+                                                        onKeyDown={(e) => handleKeyDown(e, index, 'comment')}
+                                                        className="w-full p-2 bg-surface text-text-primary border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-accent" 
+                                                    />
+                                                )} 
+                                            />
+                                        </td>
+                                        <td className="px-4 py-2">
+                                            <div className="flex items-center space-x-2 h-10">
+                                                {isUploading === field.userID ? (
+                                                    <SpinnerIcon className="text-primary" />
+                                                ) : (
+                                                    <>
+                                                        {field.hasImage && (
+                                                            <button type="button" onClick={() => handleViewImage(index)} className="cursor-pointer text-info hover:text-info-dark p-2 rounded-full hover:bg-background" title="Ver imagen">
+                                                                <EyeIcon />
+                                                            </button>
+                                                        )}
+                                                        
+                                                        <input type="file" accept="image/*" id={`image-upload-${index}`} className="hidden" onChange={(e) => handleImageUpload(e, index)} />
+                                                        <label htmlFor={`image-upload-${index}`} className="cursor-pointer text-secondary hover:text-primary p-2 rounded-full hover:bg-background" title={field.hasImage ? "Reemplazar imagen" : "Subir imagen"}>
+                                                            <CameraIcon />
+                                                        </label>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
 
                 <div className="flex justify-end space-x-4 pt-6 mt-4 border-t">
                     <Link to="/evaluations" className="bg-background text-text-primary py-2 px-4 rounded hover:bg-border transition-colors">Cancelar</Link>
@@ -734,7 +782,7 @@ const AssignGradesPage: React.FC = () => {
                                         {aiFiles.map((f, idx) => (
                                             <div key={idx} className="flex justify-between items-center bg-background p-2 rounded text-sm border border-border">
                                                 <span className="truncate">{f.name}</span>
-                                                <button onClick={() => removeFile(idx)} className="text-danger hover:text-danger-dark ml-2 p-1">
+                                                <button onClick={() => removeFile(idx)} className="text-danger hover:text-danger-text ml-2 p-1">
                                                     <XIcon className="w-4 h-4" />
                                                 </button>
                                             </div>

@@ -52,7 +52,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       links: [
         { to: '/users', label: 'Ver Usuarios', icon: <span />, permission: (has) => has([6, 7]) },
         { to: '/users/create', label: 'Crear Usuario', icon: <span />, permission: (has) => has([6]) },
-        { to: '/users/create-bulk-ia', label: 'Crear Multiples (IA)', icon: <span />, permission: (has) => has([6]) && user?.schoolId === 5 },
+        { to: '/users/create-bulk-ia', label: 'Crear Multiples (IA)', icon: <span />, permission: (has) => has([6, 7]) },
       ].filter(l => l.permission(Is))
     },
     {

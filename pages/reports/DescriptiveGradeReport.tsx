@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { User, Evaluation, Grade, IndicatorSection } from '../../types';
 import { SALA_1_INDICATORS, SALA_2_INDICATORS, SALA_3_INDICATORS } from '../../data/indicators';
@@ -13,9 +14,10 @@ const DescriptiveGradeReport: React.FC<DescriptiveGradeReportProps> = ({ student
     
     const getIndicators = () => {
         const courseName = evaluation?.course?.name.toLowerCase() || '';
-        if (courseName.includes('nivel 1') || courseName.includes('sala 1')) return SALA_1_INDICATORS;
-        if (courseName.includes('nivel 2') || courseName.includes('sala 2')) return SALA_2_INDICATORS;
-        if (courseName.includes('nivel 3') || courseName.includes('sala 3')) return SALA_3_INDICATORS;
+        // Support for Arabic (1, 2, 3) and Roman (I, II, III) numerals
+        if (/(nivel\s*1|sala\s*1|sala\s*i\b)/.test(courseName)) return SALA_1_INDICATORS;
+        if (/(nivel\s*2|sala\s*2|sala\s*ii\b)/.test(courseName)) return SALA_2_INDICATORS;
+        if (/(nivel\s*3|sala\s*3|sala\s*iii\b)/.test(courseName)) return SALA_3_INDICATORS;
         return SALA_1_INDICATORS; 
     };
     
@@ -33,23 +35,36 @@ const DescriptiveGradeReport: React.FC<DescriptiveGradeReportProps> = ({ student
 
     const DESCRIPTIVE_GRADE_OPTIONS = ["Consolidado", "En proceso", "Iniciado", "Sin Evidencias"];
 
-    const ReportHeader: React.FC = () => (
-         <div className="flex justify-between items-start mb-2 text-xs">
-            <div className="w-1/5">
-                <img src="https://jfywkgbqxijdfwqsscqa.supabase.co/storage/v1/object/public/assets/Alcaldia%20San%20Diego%20logo%20azul.png" alt="Alcaldia de San Diego" className="w-24" />
+    const ReportHeader: React.FC = () => {
+        // Customize header for School 8 (Los Tulipanes)
+        const isLosTulipanes = evaluation?.schoolID === 8;
+        
+        const schoolTitle = isLosTulipanes 
+            ? 'Centro de Educación Inicial "Los Tulipanes"' 
+            : 'Complejo Educativo "Mons. Luis Eduardo Henríquez"';
+            
+        const deaCode = isLosTulipanes 
+            ? 'OD76980812' 
+            : 'OD16020812';
+
+        return (
+             <div className="flex justify-between items-start mb-2 text-xs">
+                <div className="w-1/5">
+                    <img src="https://jfywkgbqxijdfwqsscqa.supabase.co/storage/v1/object/public/assets/Alcaldia%20San%20Diego%20logo%20azul.png" alt="Alcaldia de San Diego" className="w-24" />
+                </div>
+                <div className="w-3/5 text-center leading-tight">
+                    <p>República Bolivariana de Venezuela</p>
+                    <p>Ministerio del Poder Popular para la Educación</p>
+                    <p className="font-bold">{schoolTitle}</p>
+                    <p>Municipio San Diego - Edo. Carabobo</p>
+                    <p>Código D.E.A.: {deaCode}</p>
+                </div>
+                <div className="w-1/5 flex justify-end">
+                     <img src="https://i.imgur.com/3gXnI26.png" alt="Logo Colegio" className="w-20" />
+                </div>
             </div>
-            <div className="w-3/5 text-center leading-tight">
-                <p>República Bolivariana de Venezuela</p>
-                <p>Ministerio del Poder Popular para la Educación</p>
-                <p className="font-bold">Complejo Educativo "Mons. Luis Eduardo Henríquez"</p>
-                <p>Municipio San Diego - Edo. Carabobo</p>
-                <p>Código D.E.A.: OD16020812</p>
-            </div>
-            <div className="w-1/5 flex justify-end">
-                 <img src="https://i.imgur.com/3gXnI26.png" alt="Logo Colegio" className="w-20" />
-            </div>
-        </div>
-    );
+        );
+    };
 
     const StudentInfo: React.FC = () => (
         <div className="border-2 border-black p-2 mb-2 text-xs">
@@ -127,12 +142,6 @@ const DescriptiveGradeReport: React.FC<DescriptiveGradeReportProps> = ({ student
                 <ReportHeader />
                 <StudentInfo />
                 <SectionTable section={indicators[0]} sectionIndex={0} />
-                 <div className="mt-2 text-xs">
-                    <p><span className="font-bold">Consolidado:</span> Aprendizaje logrado</p>
-                    <p><span className="font-bold">En proceso:</span> En vía para lograr el aprendizaje</p>
-                    <p><span className="font-bold">Iniciado:</span> Requiere ayuda para lograr el aprendizaje</p>
-                    <p><span className="font-bold">Sin Evidencias:</span> Inasistente</p>
-                </div>
                 <Signatures />
                  <div className="text-right font-bold text-lg mt-2">1/2 <span className="text-xs">PAGINA</span></div>
             </div>
@@ -144,7 +153,7 @@ const DescriptiveGradeReport: React.FC<DescriptiveGradeReportProps> = ({ student
                 <SectionTable section={indicators[1]} sectionIndex={1} />
                 <div className="mt-4">
                     <h4 className="font-bold text-xs">Recomendaciones:</h4>
-                    <div className="border border-black h-32 p-1">
+                    <div className="border border-black h-32 p-1 break-words whitespace-pre-wrap">
                         {parsedData['recommendations_1'] || ''}
                     </div>
                 </div>

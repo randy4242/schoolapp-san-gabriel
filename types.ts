@@ -30,6 +30,7 @@ export interface User {
     blockedReason?: string | null;
     blockedAt?: string | null;
     lugarNacimiento?: string;
+    classroomID?: number | null;
 }
 
 export interface UserDetails {
@@ -84,6 +85,18 @@ export const ROLES = [
     { id: 9, name: 'Profesor Jefe' },
     { id: 10, name: 'Profesor Auxiliar' },
     { id: 11, name: 'Madre' }
+];
+
+export const BOLETA_LEVELS = [
+    "Sala 1",
+    "Sala 2",
+    "Sala 3",
+    "Primer Grado",
+    "Segundo Grado",
+    "Tercer Grado",
+    "Cuarto Grado",
+    "Quinto Grado",
+    "Sexto Grado"
 ];
 
 export interface Course {

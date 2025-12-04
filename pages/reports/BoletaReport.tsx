@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Certificate, IndicatorSection, Lapso, User, Parent, Course } from '../../types';
 import {
@@ -174,38 +173,54 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
     
     // Common Components
     const ReportHeader: React.FC = () => {
-        const schoolName = parsedContent.schoolName || 'Mons. Luis Eduardo Henríquez';
+        // Specific customization for School ID 8 "Los Tulipanes"
+        const isLosTulipanes = data.schoolId === 8;
+        const defaultSchoolName = parsedContent.schoolName || 'Mons. Luis Eduardo Henríquez';
+        
+        const schoolTitle = isLosTulipanes 
+            ? 'Centro de Educación Inicial "Los Tulipanes"' 
+            : `Complejo Educativo "${defaultSchoolName}"`;
+            
+        const deaCode = isLosTulipanes 
+            ? 'OD76980812' 
+            : 'OD16020812';
+
         return (
              <div className="flex justify-between items-start mb-2 text-xs">
                 <div className="w-1/4"><img src="https://jfywkgbqxijdfwqsscqa.supabase.co/storage/v1/object/public/assets/Alcaldia%20San%20Diego%20logo%20azul.png" alt="Alcaldia de San Diego" className="w-40" /></div>
                 <div className="w-1/2 text-center leading-tight">
                     <p>República Bolivariana de Venezuela</p>
                     <p>Ministerio del Poder Popular para la Educación</p>
-                    <p className="font-bold">Complejo Educativo "{schoolName}"</p>
+                    <p className="font-bold">{schoolTitle}</p>
                     <p>Municipio San Diego - Edo. Carabobo</p>
-                    <p>Código D.E.A.: OD16020812</p>
+                    <p>Código D.E.A.: {deaCode}</p>
                 </div>
                 <div className="w-1/4"></div>
             </div>
         );
     }
-    const PreschoolSignatures: React.FC = () => (
-         <div className="flex justify-around items-end text-center text-xs mt-auto pt-4">
-            <div className="w-1/3">
-                <div className="border-t border-black pt-1 mx-4">Representante</div>
-            </div>
-             <div className="w-1/3">
-                <div className="border-t border-black pt-1 mx-4 font-bold">{data.signatoryName || ''}</div>
-                <div className="text-[10px]">{data.signatoryTitle || 'Docente'}</div>
+
+    const SignaturesTable: React.FC = () => (
+        <div className="mt-auto w-full">
+            <div className="relative w-full h-20 border border-black flex">
+                <div className="w-1/3 border-r border-black relative">
+                    <div className="absolute top-1 left-1 text-[10px] font-bold">Representante:</div>
+                    <div className="absolute bottom-1 left-1 text-[10px] font-bold">Firma:</div>
+                </div>
+                <div className="w-1/3 border-r border-black relative">
+                    <div className="absolute top-1 left-1 text-[10px] font-bold">Docente:</div>
+                    <div className="absolute bottom-1 left-1 text-[10px] font-bold">Firma:</div>
+                </div>
+                <div className="w-1/3 relative">
+                    <div className="absolute top-1 left-1 text-[10px] font-bold">Docente:</div>
+                    <div className="absolute bottom-1 left-1 text-[10px] font-bold">Firma:</div>
+                </div>
             </div>
         </div>
     );
     
     // Preschool Components
-    const PreschoolStudentInfo: React.FC = () => {
-        // Recalculate totals to ensure percentages are correct (0-100%)
-        // We use the data from the 'attendance' object but calculate the total sum manually 
-        // because 'attendance.total' in the DB might be storing 'remaining days'.
+    const PreschoolStudentInfo: React.FC<{ showFeatures: boolean }> = ({ showFeatures }) => {
         const present = attendance?.present || 0;
         const late = attendance?.late || 0;
         const absent = attendance?.absent || 0;
@@ -213,7 +228,12 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
 
         const diasAsistidos = present + late;
         const diasInasistentes = absent + justified;
-        const totalRegistrado = diasAsistidos + diasInasistentes;
+        
+        // Use stored diasHabiles if available (from creation form), otherwise calculate from attendance total
+        const diasHabilesSaved = gradesData['diasHabiles'];
+        const totalRegistrado = (diasHabilesSaved !== undefined && diasHabilesSaved !== null && diasHabilesSaved !== '')
+            ? Number(diasHabilesSaved) 
+            : (diasAsistidos + diasInasistentes);
 
         const porcentajeAsistencia = totalRegistrado > 0 ? ((diasAsistidos / totalRegistrado) * 100).toFixed(1) + '%' : '0%';
         const porcentajeInasistencia = totalRegistrado > 0 ? ((diasInasistentes / totalRegistrado) * 100).toFixed(1) + '%' : '0%';
@@ -233,56 +253,49 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
                     <div className="col-span-3"><span className="font-bold">Días hábiles:</span> {totalRegistrado}</div>
                     <div className="col-span-3"><span className="font-bold">Porcentaje de Asistencia:</span> {porcentajeAsistencia}</div>
                     <div className="col-span-9"><span className="font-bold">Porcentaje de Inasistencia:</span> {porcentajeInasistencia}</div>
-                    <div className="col-span-12 mt-1">
-                        <div className="border border-black p-2 min-h-[3rem]">
-                            <span className="font-bold block mb-1">Características de la actuación escolar:</span>
-                            {gradesData['schoolPerformanceFeatures'] || ''}
+                    {showFeatures && (
+                        <div className="col-span-12 mt-1">
+                            <div className="border border-black p-2 min-h-[3rem] break-words whitespace-pre-wrap">
+                                <span className="font-bold block mb-1">Características de la actuación escolar:</span>
+                                {gradesData['schoolPerformanceFeatures'] || ''}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
         );
     }
     const PreschoolPage: React.FC<{ pageNumber: number, totalPages: number }> = ({ pageNumber, totalPages }) => {
         const sectionsForPage = indicators.filter((_, index) => {
-            if (pageNumber === 1) return index < 1; // Section 0 on page 1
-            if (pageNumber === 2) return index >= 1; // Rest on page 2
+            if (pageNumber === 1) return index < 1; 
+            if (pageNumber === 2) return index >= 1; 
             return false;
         });
 
         if (sectionsForPage.length === 0) return null;
 
         return (
-            <div className="p-6" style={{ width: '210mm', height: '297mm', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', pageBreakBefore: pageNumber > 1 ? 'always' : 'auto' }}>
+            <div className="p-6" style={{ width: '100%', height: '297mm', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', pageBreakBefore: pageNumber > 1 ? 'always' : 'auto' }}>
                 <ReportHeader />
-                <PreschoolStudentInfo />
+                <PreschoolStudentInfo showFeatures={pageNumber === 1} />
                 {sectionsForPage.map((section, index) => {
                     const originalIndex = indicators.findIndex(s => s.title === section.title);
                     return <SectionTable key={originalIndex} section={section} sectionIndex={originalIndex} gradesData={gradesData} />;
                 })}
-                {pageNumber === 1 && (
-                    <div className="mt-2 text-xs">
-                        <p><span className="font-bold">Consolidado:</span> Aprendizaje logrado</p>
-                        <p><span className="font-bold">En proceso:</span> En vía para lograr el aprendizaje</p>
-                        <p><span className="font-bold">Iniciado:</span> Requiere ayuda para lograr el aprendizaje</p>
-                        <p><span className="font-bold">Sin Evidencias:</span> Inasistente</p>
-                    </div>
-                )}
                 {pageNumber === 2 && indicators.some(s => s.hasRecommendations) && (
-                    <div className="mt-4">
-                        <h4 className="font-bold text-xs">Recomendaciones:</h4>
-                        <div className="border border-black min-h-[8rem] p-1">{gradesData['recommendations_1'] || ''}</div>
+                    <div className="border border-black p-2 flex-grow flex flex-col break-words whitespace-pre-wrap text-xs">
+                        <span className="font-bold block mb-1">Recomendaciones:</span>
+                        {gradesData['recommendations_1'] || ''}
                     </div>
                 )}
-                <PreschoolSignatures />
-                <div className="text-right font-bold text-lg mt-2">{pageNumber}/{totalPages} <span className="text-xs">PAGINA</span></div>
+                <SignaturesTable />
+                <div className="text-right font-bold text-[10px] mt-1">{pageNumber}/{totalPages} PAGINA</div>
             </div>
         );
     };
 
     // Primary Grade Components
     const PrimaryGradePage: React.FC = () => {
-        // Recalculate totals
         const present = attendance?.present || 0;
         const late = attendance?.late || 0;
         const absent = attendance?.absent || 0;
@@ -290,34 +303,41 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
 
         const diasAsistidos = present + late;
         const diasInasistentes = absent + justified;
-        const totalRegistrado = diasAsistidos + diasInasistentes;
+        
+        // Use stored diasHabiles if available
+        const diasHabilesSaved = gradesData['diasHabiles'];
+        const totalRegistrado = (diasHabilesSaved !== undefined && diasHabilesSaved !== null && diasHabilesSaved !== '')
+            ? Number(diasHabilesSaved) 
+            : (diasAsistidos + diasInasistentes);
         
         const GradeHeader: React.FC = () => (
-            <table className="w-full text-sm font-bold my-2">
+            <table className="w-full text-[10px] font-bold border-collapse">
                 <tbody>
-                    <tr className="text-center"><td colSpan={4}>INSTRUMENTO DE EVALUACIÓN DE EDUCACIÓN PRIMARIA</td></tr>
-                    <tr className="text-center"><td colSpan={4}>{level?.toUpperCase()}</td></tr>
-                    <tr className="text-center"><td colSpan={4}>{lapso?.nombre || "PRIMER MOMENTO"} AÑO ESCOLAR {new Date(lapso?.fechaInicio || Date.now()).getFullYear()}-{new Date(lapso?.fechaFin || Date.now()).getFullYear()}</td></tr>
-                    <tr><td colSpan={4} className="h-2"></td></tr>
+                    <tr className="text-center"><td colSpan={4} className="p-0">INSTRUMENTO DE EVALUACIÓN DE EDUCACIÓN PRIMARIA</td></tr>
+                    <tr className="text-center"><td colSpan={4} className="p-0">{level?.toUpperCase()}</td></tr>
+                    <tr className="text-center"><td colSpan={4} className="p-0">{lapso?.nombre || "PRIMER MOMENTO"} AÑO ESCOLAR {new Date(lapso?.fechaInicio || Date.now()).getFullYear()}-{new Date(lapso?.fechaFin || Date.now()).getFullYear()}</td></tr>
+                    
+                    <tr><td colSpan={4} className="h-1"></td></tr>
+                    
                     <tr>
-                        <td className="w-1/5">Estudiante:</td>
-                        <td className="w-2/5 border-b border-black font-normal">{resolvedStudentName}</td>
-                        <td className="w-1/12">C.E.</td>
-                        <td className="w-1/4 border-b border-black font-normal">{extraData.cedula}</td>
+                        <td className="w-1/6 p-0">Estudiante:</td>
+                        <td className="w-2/5 border-b border-black font-normal p-0">{resolvedStudentName}</td>
+                        <td className="w-1/12 text-right pr-1 p-0">C.E.</td>
+                        <td className="w-1/4 border-b border-black font-normal p-0">{extraData.cedula}</td>
                     </tr>
-                    <tr><td colSpan={4} className="h-2"></td></tr>
-                    <tr>
-                        <td>Docente:</td>
-                        <td className="border-b border-black font-normal">{extraData.teacherName}</td>
-                        <td>Representante:</td>
-                        <td className="border-b border-black font-normal">{extraData.parentName}</td>
+                    
+                    <tr className="pt-1">
+                        <td className="p-0">Docente:</td>
+                        <td className="border-b border-black font-normal p-0">{extraData.teacherName}</td>
+                        <td className="text-right pr-1 p-0">Rep:</td>
+                        <td className="border-b border-black font-normal p-0">{extraData.parentName}</td>
                     </tr>
-                    <tr><td colSpan={4} className="h-2"></td></tr>
-                    <tr>
-                        <td>INICIO:</td>
-                        <td className="border-b border-black font-normal">{lapso ? new Date(lapso.fechaInicio).toLocaleDateString('es-ES') : ''}</td>
-                        <td>CULMINACIÓN:</td>
-                        <td className="border-b border-black font-normal">{lapso ? new Date(lapso.fechaFin).toLocaleDateString('es-ES') : ''}</td>
+                    
+                    <tr className="pt-1">
+                        <td className="p-0">INICIO:</td>
+                        <td className="border-b border-black font-normal p-0">{lapso ? new Date(lapso.fechaInicio).toLocaleDateString('es-ES') : ''}</td>
+                        <td className="text-right pr-1 p-0">FIN:</td>
+                        <td className="border-b border-black font-normal p-0">{lapso ? new Date(lapso.fechaFin).toLocaleDateString('es-ES') : ''}</td>
                     </tr>
                 </tbody>
             </table>
@@ -327,7 +347,7 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
             const GRADE_COLUMNS = ["C.", "E.P.", "I.", "C.A."];
             
             return (
-                <table className="w-full border-collapse border-2 border-black text-xs my-2">
+                <table className="w-full border-collapse border-2 border-black text-xs my-1">
                     <thead>
                         <tr className="bg-gray-100">
                             <th className="border border-black p-1 w-2/3 text-center font-bold">INDICADORES</th>
@@ -364,25 +384,11 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
             );
         };
         
-        const PrimarySignatures: React.FC = () => (
-            <div className="flex justify-between items-end text-center text-xs mt-24 pt-4 px-8">
-                <div className="w-2/5">
-                    <div className="border-t border-black pt-1 mx-4">Representante</div>
-                </div>
-                <div className="w-2/5">
-                    <div className="border-t border-black pt-1 mx-4">
-                         <p className="font-bold">{extraData.teacherName}</p>
-                         <p>Docente</p>
-                    </div>
-                </div>
-            </div>
-        );
-
         return (
-            <div className="p-6" style={{ width: '210mm', minHeight: '297mm', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', fontSize: '10pt' }}>
+            <div className="p-6" style={{ width: '100%', height: '297mm', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', fontSize: '9pt' }}>
                 <ReportHeader />
                 {extraData.loading ? <p>Cargando datos adicionales...</p> : <GradeHeader />}
-                <table className="w-full text-xs font-bold border-collapse border-2 border-black my-2">
+                <table className="w-full text-xs font-bold border-collapse border-2 border-black my-1">
                     <tbody>
                         <tr>
                             <td className="border border-black p-1 text-center">Días Hábiles: {totalRegistrado}</td>
@@ -391,20 +397,21 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
                         </tr>
                     </tbody>
                 </table>
-                <div className="space-y-2 flex-grow">
+                <div className="space-y-1">
                      <PrimaryGradeIndicatorsTable indicators={indicators} gradesData={gradesData} />
                 </div>
-                 <div className="mt-4 text-xs space-y-2">
-                    <div>
+                 <div className="mt-2 text-xs space-y-1 mb-2 flex-grow flex flex-col">
+                    <div className="flex-1 flex flex-col">
                         <h4 className="font-bold">Actitudes, Hábitos de Trabajo:</h4>
-                        <p className="border border-black min-h-[3rem] p-1">{gradesData['actitudesHabitos'] || ''}</p>
+                        <p className="border border-black p-1 break-words whitespace-pre-wrap flex-grow">{gradesData['actitudesHabitos'] || ''}</p>
                     </div>
-                     <div>
+                     <div className="flex-1 flex flex-col">
                         <h4 className="font-bold">Recomendaciones:</h4>
-                        <p className="border border-black min-h-[3rem] p-1">{gradesData['recomendacionesDocente'] || ''}</p>
+                        <p className="border border-black p-1 break-words whitespace-pre-wrap flex-grow">{gradesData['recomendacionesDocente'] || ''}</p>
                     </div>
                 </div>
-                <PrimarySignatures />
+                <SignaturesTable />
+                <div className="text-right font-bold text-[10px] mt-1">1/1 PAGINA</div>
             </div>
         );
     };

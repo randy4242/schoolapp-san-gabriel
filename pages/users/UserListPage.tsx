@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
 import { User, ROLES } from '../../types';
-import { BellIcon, BlockIcon, BookOpenIcon, CreditCardIcon, FamilyIcon, DocumentTextIcon, ShoppingCartIcon } from '../../components/icons';
+import { BellIcon, BlockIcon, BookOpenIcon, CreditCardIcon, FamilyIcon, DocumentTextIcon, ShoppingCartIcon, SpinnerIcon } from '../../components/icons';
 import TaughtCoursesModal from './TaughtCoursesModal';
 import ParentPaymentsModal from './ParentPaymentsModal';
 import ParentNotificationsModal from './ParentNotificationsModal';
@@ -31,6 +31,8 @@ const UserListPage: React.FC = () => {
   // Print Modal States
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [selectedPrintRoles, setSelectedPrintRoles] = useState<number[]>([]);
+  const [includeStudentDetails, setIncludeStudentDetails] = useState(true); // Default true
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   const { user, hasPermission } = useAuth();
   const location = useLocation();
@@ -109,6 +111,7 @@ const UserListPage: React.FC = () => {
   const handleOpenPrintModal = () => {
       // Initialize with NO roles selected by default (optimization)
       setSelectedPrintRoles([]);
+      setIncludeStudentDetails(true);
       setIsPrintModalOpen(true);
   };
 
@@ -126,7 +129,44 @@ const UserListPage: React.FC = () => {
       setSelectedPrintRoles([]);
   };
 
-  // This function is computationally expensive, so we only call it on final action, not render
+  // Helper to enrich data with Classroom and Parents
+  const enrichUsersWithDetails = async (baseUsers: User[]) => {
+      if (!includeStudentDetails || !user?.schoolId) return baseUsers;
+
+      // 1. Fetch Classrooms Map
+      let classroomMap = new Map<number, string>();
+      try {
+          const classrooms = await apiService.getClassrooms(user.schoolId);
+          classrooms.forEach(c => classroomMap.set(c.classroomID, c.name));
+      } catch (e) {
+          console.error("Error fetching classrooms for report", e);
+      }
+
+      // 2. Process Users (Parallel fetching for parents)
+      const enriched = await Promise.all(baseUsers.map(async (u) => {
+          // Only process details for students (Role 1)
+          if (u.roleID !== 1) return u;
+
+          let parentNames = '';
+          try {
+              const parents = await apiService.getParentsOfChild(u.userID, user.schoolId);
+              parentNames = parents.map(p => p.userName).join(', ');
+          } catch (e) {
+              console.warn(`Error fetching parents for ${u.userName}`, e);
+          }
+
+          const classroomName = u.classroomID ? classroomMap.get(u.classroomID) : '';
+
+          return {
+              ...u,
+              classroomName,
+              parentNames
+          };
+      }));
+
+      return enriched;
+  };
+
   const getFilteredUsersForReport = () => {
       return users
           .filter(u => selectedPrintRoles.includes(u.roleID))
@@ -137,62 +177,94 @@ const UserListPage: React.FC = () => {
           });
   };
 
-  const handleGeneratePdf = () => {
-      const reportData = getFilteredUsersForReport();
-      if (reportData.length === 0) {
+  const handleGeneratePdf = async () => {
+      const basicList = getFilteredUsersForReport();
+      if (basicList.length === 0) {
           alert("No hay usuarios seleccionados para imprimir. Por favor seleccione al menos un rol.");
           return;
       }
-      
-      setIsPrintModalOpen(false);
-      navigate('/report-viewer', { 
-          state: { 
-              reportData: reportData, 
-              reportType: 'user-list',
-              schoolName: schoolName 
-          } 
-      });
+
+      setIsGeneratingReport(true);
+      try {
+          const reportData = await enrichUsersWithDetails(basicList);
+          setIsPrintModalOpen(false);
+          navigate('/report-viewer', { 
+              state: { 
+                  reportData: reportData, 
+                  reportType: 'user-list',
+                  schoolName: schoolName 
+              } 
+          });
+      } catch (e) {
+          console.error(e);
+          alert("Error al generar el reporte.");
+      } finally {
+          setIsGeneratingReport(false);
+      }
   };
 
-  const handleGenerateExcel = () => {
-      const reportData = getFilteredUsersForReport();
-      if (reportData.length === 0) {
+  const handleGenerateExcel = async () => {
+      const basicList = getFilteredUsersForReport();
+      if (basicList.length === 0) {
           alert("No hay usuarios seleccionados para exportar. Por favor seleccione al menos un rol.");
           return;
       }
 
-      // Format data for Excel
-      const excelData = reportData.map((u, index) => ({
-          "No.": index + 1,
-          "Nombre Completo": u.userName,
-          "Cédula": u.cedula || 'N/A',
-          "Correo Electrónico": u.email,
-          "Teléfono": u.phoneNumber || 'N/A',
-          "Rol": getRoleName(u.roleID),
-          "Estado": u.isBlocked ? 'Bloqueado' : 'Activo'
-      }));
+      setIsGeneratingReport(true);
+      try {
+          const enrichedList = await enrichUsersWithDetails(basicList);
 
-      const worksheet = XLSX.utils.json_to_sheet(excelData);
-      
-      // Auto-width columns
-      const wscols = [
-          { wch: 5 },  // No
-          { wch: 30 }, // Nombre
-          { wch: 15 }, // Cedula
-          { wch: 30 }, // Email
-          { wch: 15 }, // Telefono
-          { wch: 15 }, // Rol
-          { wch: 10 }, // Estado
-      ];
-      worksheet['!cols'] = wscols;
+          // Format data for Excel
+          const excelData = enrichedList.map((u: any, index) => {
+              const baseData = {
+                  "No.": index + 1,
+                  "Nombre Completo": u.userName,
+                  "Cédula": u.cedula || 'N/A',
+                  "Correo Electrónico": u.email,
+                  "Teléfono": u.phoneNumber || 'N/A',
+                  "Rol": getRoleName(u.roleID),
+                  "Estado": u.isBlocked ? 'Bloqueado' : 'Activo'
+              };
 
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Lista de Usuarios");
-      
-      const fileName = `Lista_Usuarios_${schoolName.replace(/[^a-z0-9]/gi, '_')}.xlsx`;
-      XLSX.writeFile(workbook, fileName);
-      
-      setIsPrintModalOpen(false);
+              if (includeStudentDetails && u.roleID === 1) {
+                  return {
+                      ...baseData,
+                      "Salón": u.classroomName || 'N/A',
+                      "Padres/Representantes": u.parentNames || 'N/A'
+                  };
+              }
+              return baseData;
+          });
+
+          const worksheet = XLSX.utils.json_to_sheet(excelData);
+          
+          // Auto-width columns
+          const wscols = [
+              { wch: 5 },  // No
+              { wch: 30 }, // Nombre
+              { wch: 15 }, // Cedula
+              { wch: 30 }, // Email
+              { wch: 15 }, // Telefono
+              { wch: 15 }, // Rol
+              { wch: 10 }, // Estado
+              { wch: 20 }, // Salon
+              { wch: 40 }, // Padres
+          ];
+          worksheet['!cols'] = wscols;
+
+          const workbook = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(workbook, worksheet, "Lista de Usuarios");
+          
+          const fileName = `Lista_Usuarios_${schoolName.replace(/[^a-z0-9]/gi, '_')}.xlsx`;
+          XLSX.writeFile(workbook, fileName);
+          
+          setIsPrintModalOpen(false);
+      } catch (e) {
+          console.error(e);
+          alert("Error al generar el Excel.");
+      } finally {
+          setIsGeneratingReport(false);
+      }
   };
 
   const getRoleName = (roleId: number) => {
@@ -311,26 +383,28 @@ const UserListPage: React.FC = () => {
 
       {/* --- Print Configuration Modal --- */}
       {isPrintModalOpen && (
-          <Modal isOpen={true} onClose={() => setIsPrintModalOpen(false)} title="Configurar Impresión / Exportación">
+          <Modal isOpen={true} onClose={() => !isGeneratingReport && setIsPrintModalOpen(false)} title="Configurar Impresión / Exportación">
               <div>
-                  <p className="mb-4 text-text-secondary">Seleccione los roles que desea incluir en el reporte:</p>
+                  <p className="mb-2 text-text-secondary">Seleccione los roles que desea incluir en el reporte:</p>
                   
                   <div className="mb-4 flex gap-4">
                       <button 
                           onClick={selectAllRoles} 
                           className="text-sm text-primary hover:underline font-medium"
+                          disabled={isGeneratingReport}
                       >
                           Seleccionar Todos
                       </button>
                       <button 
                           onClick={deselectAllRoles} 
                           className="text-sm text-secondary hover:underline font-medium"
+                          disabled={isGeneratingReport}
                       >
                           Deseleccionar Todos
                       </button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto mb-6 border p-3 rounded">
+                  <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto mb-4 border p-3 rounded">
                       {ROLES.map(role => (
                           <label key={role.id} className="flex items-center space-x-2 cursor-pointer p-1 hover:bg-background rounded">
                               <input 
@@ -338,10 +412,27 @@ const UserListPage: React.FC = () => {
                                   checked={selectedPrintRoles.includes(role.id)} 
                                   onChange={() => togglePrintRole(role.id)}
                                   className="h-4 w-4 rounded border-border text-primary focus:ring-accent"
+                                  disabled={isGeneratingReport}
                               />
                               <span className="text-text-primary text-sm">{role.name}</span>
                           </label>
                       ))}
+                  </div>
+
+                  <div className="mb-6 border-t pt-4">
+                      <label className="flex items-start space-x-2 cursor-pointer">
+                          <input 
+                              type="checkbox" 
+                              checked={includeStudentDetails}
+                              onChange={(e) => setIncludeStudentDetails(e.target.checked)}
+                              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-accent"
+                              disabled={isGeneratingReport}
+                          />
+                          <div>
+                              <span className="block text-sm font-semibold text-text-primary">Incluir Detalles de Estudiantes</span>
+                              <span className="block text-xs text-text-secondary">Si se selecciona, se buscarán y mostrarán los <strong>Salones</strong> y <strong>Padres</strong> para los usuarios con rol de Estudiante. (Puede demorar más).</span>
+                          </div>
+                      </label>
                   </div>
 
                   <div className="flex justify-between items-center pt-4 border-t mt-2">
@@ -351,15 +442,19 @@ const UserListPage: React.FC = () => {
                       <div className="space-x-2 flex">
                           <button 
                               onClick={handleGenerateExcel} 
-                              className="bg-success text-text-on-primary py-2 px-4 rounded hover:bg-success-text transition-colors flex items-center"
+                              disabled={isGeneratingReport}
+                              className="bg-success text-text-on-primary py-2 px-4 rounded hover:bg-success-text transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                              <span className="mr-1">📊</span> Exportar Excel
+                              {isGeneratingReport ? <SpinnerIcon className="w-4 h-4 mr-2" /> : <span className="mr-1">📊</span>} 
+                              Exportar Excel
                           </button>
                           <button 
                               onClick={handleGeneratePdf} 
-                              className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 transition-colors flex items-center"
+                              disabled={isGeneratingReport}
+                              className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                              <DocumentTextIcon className="w-4 h-4 mr-1"/> Imprimir PDF
+                              {isGeneratingReport ? <SpinnerIcon className="w-4 h-4 mr-2" /> : <DocumentTextIcon className="w-4 h-4 mr-1"/>} 
+                              Imprimir PDF
                           </button>
                       </div>
                   </div>

@@ -22,9 +22,10 @@ const DescriptiveGradeFormModal: React.FC<DescriptiveGradeFormModalProps> = ({ s
 
     const getIndicators = () => {
         const courseName = evaluation.course?.name.toLowerCase() || '';
-        if (courseName.includes('nivel 1') || courseName.includes('sala 1')) return SALA_1_INDICATORS;
-        if (courseName.includes('nivel 2') || courseName.includes('sala 2')) return SALA_2_INDICATORS;
-        if (courseName.includes('nivel 3') || courseName.includes('sala 3')) return SALA_3_INDICATORS;
+        // Support for Arabic (1, 2, 3) and Roman (I, II, III) numerals
+        if (/(nivel\s*1|sala\s*1|sala\s*i\b)/.test(courseName)) return SALA_1_INDICATORS;
+        if (/(nivel\s*2|sala\s*2|sala\s*ii\b)/.test(courseName)) return SALA_2_INDICATORS;
+        if (/(nivel\s*3|sala\s*3|sala\s*iii\b)/.test(courseName)) return SALA_3_INDICATORS;
         return SALA_1_INDICATORS; // Fallback to Sala 1
     };
 
@@ -43,7 +44,7 @@ const DescriptiveGradeFormModal: React.FC<DescriptiveGradeFormModalProps> = ({ s
         return {};
     };
 
-    const { register, handleSubmit, formState: { errors } } = useForm({
+    const { register, handleSubmit, watch, formState: { errors } } = useForm({
         defaultValues: getDefaultValues(),
     });
 
@@ -78,7 +79,7 @@ const DescriptiveGradeFormModal: React.FC<DescriptiveGradeFormModalProps> = ({ s
                 {error && <p className="text-danger bg-danger-light p-2 rounded mb-4">{error}</p>}
                 
                 <div className="max-h-[65vh] overflow-y-auto pr-2">
-                    <DescriptiveGradeSheet indicators={indicators} register={register} />
+                    <DescriptiveGradeSheet indicators={indicators} register={register} watch={watch} />
                 </div>
 
                 <div className="flex justify-end space-x-4 pt-6 border-t mt-6">

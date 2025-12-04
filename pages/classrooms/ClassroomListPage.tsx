@@ -7,6 +7,7 @@ import { EyeIcon, ChartBarIcon } from '../../components/icons';
 import EditClassroomModal from './EditClassroomModal';
 import ClassroomStudentsModal from './ClassroomStudentsModal';
 import ClassroomStatsModal from './ClassroomStatsModal';
+import Modal from '../../components/Modal';
 
 
 const ClassroomListPage: React.FC = () => {
@@ -18,10 +19,12 @@ const ClassroomListPage: React.FC = () => {
   const [editingClassroom, setEditingClassroom] = useState<Classroom | null>(null);
   const [viewingStudentsClassroom, setViewingStudentsClassroom] = useState<Classroom | null>(null);
   const [viewingStatsClassroom, setViewingStatsClassroom] = useState<Classroom | null>(null);
+  const [classroomToDelete, setClassroomToDelete] = useState<Classroom | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const location = useLocation();
 
   const canManageClassrooms = useMemo(() => hasPermission([6]), [hasPermission]);
+  const allowedSchools = [5, 6, 7, 8, 9];
 
   const fetchClassrooms = async () => {
     if (user?.schoolId) {
@@ -55,21 +58,31 @@ const ClassroomListPage: React.FC = () => {
       fetchClassrooms();
   };
 
-  const handleDelete = async (classroomId: number) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este salón?')) {
-      try {
-        await apiService.deleteClassroom(classroomId);
-        fetchClassrooms();
-      } catch (err) {
-        setError('Error al eliminar el salón.');
-        console.error(err);
-      }
+  const confirmDelete = async () => {
+    if (!classroomToDelete) return;
+    
+    try {
+      await apiService.deleteClassroom(classroomToDelete.classroomID);
+      fetchClassrooms();
+      setClassroomToDelete(null); // Close modal
+    } catch (err) {
+      setError('Error al eliminar el salón.');
+      console.error(err);
+      setClassroomToDelete(null); // Close modal
     }
+  };
+  
+  // Helper to hide the internal tag [Tag] from the display name
+  const getDisplayName = (name: string) => {
+      if (user?.schoolId && allowedSchools.includes(user.schoolId)) {
+          return name.replace(/^\[.*?\]\s*/, '');
+      }
+      return name;
   };
   
   const filteredClassrooms = useMemo(() => {
     return classrooms.filter(c => 
-        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        getDisplayName(c.name).toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.description.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [classrooms, searchTerm]);
@@ -111,7 +124,7 @@ const ClassroomListPage: React.FC = () => {
             <tbody className="bg-surface divide-y divide-border">
               {filteredClassrooms.map((c) => (
                 <tr key={c.classroomID} className="hover:bg-background">
-                  <td className="px-6 py-4 whitespace-nowrap">{c.name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{getDisplayName(c.name)}</td>
                   <td className="px-6 py-4 whitespace-nowrap">{c.description}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2">
@@ -124,7 +137,7 @@ const ClassroomListPage: React.FC = () => {
                         <button onClick={() => setViewingStatsClassroom(c)} className="text-success hover:text-success-text p-1 rounded-md hover:bg-success-light" title="Ver Estadísticas">
                             <ChartBarIcon />
                         </button>
-                        <button onClick={() => handleDelete(c.classroomID)} className="text-danger hover:text-danger-text p-1 rounded-md hover:bg-danger-light" title="Eliminar">
+                        <button onClick={() => setClassroomToDelete(c)} className="text-danger hover:text-danger-text p-1 rounded-md hover:bg-danger-light" title="Eliminar">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                         </button>
                     </div>
@@ -135,6 +148,7 @@ const ClassroomListPage: React.FC = () => {
           </table>
         </div>
       )}
+      
       {editingClassroom && (
         <EditClassroomModal
           classroom={editingClassroom}
@@ -142,6 +156,7 @@ const ClassroomListPage: React.FC = () => {
           onSaveSuccess={handleSaveSuccess}
         />
       )}
+      
       {viewingStudentsClassroom && (
         <ClassroomStudentsModal
           classroomId={viewingStudentsClassroom.classroomID}
@@ -149,12 +164,41 @@ const ClassroomListPage: React.FC = () => {
           onClose={() => setViewingStudentsClassroom(null)}
         />
       )}
+      
       {viewingStatsClassroom && (
         <ClassroomStatsModal
           classroomId={viewingStatsClassroom.classroomID}
           classroomName={viewingStatsClassroom.name}
           onClose={() => setViewingStatsClassroom(null)}
         />
+      )}
+
+      {classroomToDelete && (
+        <Modal isOpen={!!classroomToDelete} onClose={() => setClassroomToDelete(null)} title="Confirmar Eliminación">
+            <div>
+                <p className="text-text-primary">
+                    ¿Estás seguro de que quieres eliminar el salón "<strong>{getDisplayName(classroomToDelete.name)}</strong>"?
+                </p>
+                <p className="mt-2 text-sm text-text-secondary">
+                    Esta acción eliminará también las inscripciones y asociaciones relacionadas a este salón.
+                </p>
+            </div>
+            <div className="flex justify-end space-x-4 pt-6 mt-4 border-t border-border">
+                <button 
+                    type="button" 
+                    onClick={() => setClassroomToDelete(null)}
+                    className="bg-background text-text-primary py-2 px-4 rounded hover:bg-border transition-colors"
+                >
+                    Cancelar
+                </button>
+                <button 
+                    onClick={confirmDelete}
+                    className="bg-danger text-text-on-primary py-2 px-4 rounded hover:bg-danger-dark transition-colors"
+                >
+                    Sí, Eliminar
+                </button>
+            </div>
+        </Modal>
       )}
     </div>
   );

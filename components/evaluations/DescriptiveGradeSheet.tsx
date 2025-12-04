@@ -1,15 +1,16 @@
 import React from 'react';
-import { UseFormRegister } from 'react-hook-form';
+import { UseFormRegister, UseFormWatch } from 'react-hook-form';
 import { IndicatorSection } from '../../types';
 
 interface DescriptiveGradeSheetProps {
     indicators: IndicatorSection[];
     register: UseFormRegister<any>;
+    watch: UseFormWatch<any>;
 }
 
 const DESCRIPTIVE_GRADE_OPTIONS = ["Consolidado", "En proceso", "Iniciado", "Sin Evidencias"];
 
-const DescriptiveGradeSheet: React.FC<DescriptiveGradeSheetProps> = ({ indicators, register }) => {
+const DescriptiveGradeSheet: React.FC<DescriptiveGradeSheetProps> = ({ indicators, register, watch }) => {
     return (
         <div className="space-y-6">
             {indicators.map((section, sectionIndex) => (
@@ -50,13 +51,19 @@ const DescriptiveGradeSheet: React.FC<DescriptiveGradeSheetProps> = ({ indicator
                     {section.hasRecommendations && (
                         <div className="p-4 border-t border-border">
                             <label htmlFor={`recommendations_${sectionIndex}`} className="block text-sm font-medium text-text-primary mb-2">Recomendaciones</label>
-                            <textarea
-                                id={`recommendations_${sectionIndex}`}
-                                {...register(`recommendations_${sectionIndex}`)}
-                                rows={4}
-                                className="w-full p-2 border border-border rounded-md bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
-                                placeholder="Escriba aquí las recomendaciones para este estudiante en esta área..."
-                            />
+                            <div className="relative">
+                                <textarea
+                                    id={`recommendations_${sectionIndex}`}
+                                    {...register(`recommendations_${sectionIndex}`)}
+                                    maxLength={250}
+                                    rows={4}
+                                    className="w-full p-2 border border-border rounded-md bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
+                                    placeholder="Escriba aquí las recomendaciones para este estudiante en esta área..."
+                                />
+                                <div className="text-right text-xs text-text-secondary mt-1">
+                                    {(watch(`recommendations_${sectionIndex}`) || '').length}/250 caracteres
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

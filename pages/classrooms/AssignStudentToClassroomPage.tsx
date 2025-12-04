@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
@@ -9,6 +8,15 @@ import { User, Classroom } from '../../types';
 type FormInputs = {
     selectedUserId: number;
     selectedClassroomId: number;
+};
+
+// Helper to hide the internal tag [Tag] from the display name
+const getDisplayName = (name: string, schoolId?: number) => {
+    const allowedSchools = [5, 6, 7, 8, 9];
+    if (schoolId && allowedSchools.includes(schoolId)) {
+        return name.replace(/^\[.*?\]\s*/, '');
+    }
+    return name;
 };
 
 const AssignStudentToClassroomPage: React.FC = () => {
@@ -56,10 +64,10 @@ const AssignStudentToClassroomPage: React.FC = () => {
         if (!classroomSearch) return classrooms;
         const query = classroomSearch.toLowerCase();
         return classrooms.filter(c => 
-            c.name.toLowerCase().includes(query) ||
+            getDisplayName(c.name, user?.schoolId).toLowerCase().includes(query) ||
             c.description.toLowerCase().includes(query)
         );
-    }, [classrooms, classroomSearch]);
+    }, [classrooms, classroomSearch, user?.schoolId]);
 
     const onSubmit: SubmitHandler<FormInputs> = async (data) => {
         setSubmitting(true);
@@ -133,7 +141,7 @@ const AssignStudentToClassroomPage: React.FC = () => {
                         <option value="">-- Seleccione un salón --</option>
                         {filteredClassrooms.map(classroom => (
                             <option key={classroom.classroomID} value={classroom.classroomID}>
-                                {classroom.name}
+                                {getDisplayName(classroom.name, user?.schoolId)}
                             </option>
                         ))}
                     </select>

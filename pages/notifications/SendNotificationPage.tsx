@@ -1,8 +1,11 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { apiService } from '../../services/apiService';
+import { geminiService } from '../../services/geminiService';
 import { useAuth } from '../../hooks/useAuth';
 import { User, Classroom, ROLES } from '../../types';
+import { SpinnerIcon, SparklesIcon } from '../../components/icons';
 
 type TemplateFields = {
   // for cobro
@@ -44,6 +47,9 @@ const SendNotificationPage: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [userSearch, setUserSearch] = useState('');
+  
+  // AI State
+  const [isImproving, setIsImproving] = useState(false);
 
   const formValues = watch();
   const target = watch('target');
@@ -110,6 +116,27 @@ const SendNotificationPage: React.FC = () => {
       }
   }, [typeSelect, formValues, setValue, buildTemplate]);
 
+  const handleAiImproveContent = async () => {
+        const currentContent = watch('content');
+        if (!currentContent?.trim()) return;
+
+        setIsImproving(true);
+        try {
+            const prompt = `Mejora la redacción del siguiente texto para una notificación escolar formal y clara. Mantén el mensaje original pero hazlo más profesional y amigable. Solo devuelve el texto mejorado, sin explicaciones: "${currentContent}"`;
+            const response = await geminiService.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [{ text: prompt }]
+            });
+            if (response.text) {
+                setValue('content', response.text.trim(), { shouldDirty: true });
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Error al mejorar con IA. Intente nuevamente.");
+        } finally {
+            setIsImproving(false);
+        }
+  };
 
   const onSubmit: SubmitHandler<FormInputs> = async (data) => {
     if (!user?.schoolId) {
@@ -264,9 +291,18 @@ const SendNotificationPage: React.FC = () => {
           <input {...register('title', { required: true })} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" />
           {errors.title && <p className="text-danger text-xs mt-1">El título es requerido</p>}
         </div>
-        <div>
+        <div className="relative">
           <label className="block text-sm font-medium text-text-primary">Contenido</label>
           <textarea {...register('content', { required: true })} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" rows={6}></textarea>
+          <button
+                type="button"
+                onClick={handleAiImproveContent}
+                disabled={isImproving}
+                className="absolute top-8 right-2 text-primary hover:text-accent bg-background rounded-full p-1 border border-border shadow-sm transition-colors"
+                title="Mejorar redacción con IA"
+            >
+                {isImproving ? <SpinnerIcon className="w-5 h-5 text-accent" /> : <SparklesIcon className="w-5 h-5" />}
+            </button>
           {errors.content && <p className="text-danger text-xs mt-1">El contenido es requerido</p>}
         </div>
         

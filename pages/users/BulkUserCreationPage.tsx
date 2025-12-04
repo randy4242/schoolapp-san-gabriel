@@ -13,7 +13,8 @@ import { SpinnerIcon, UserCheckIcon, XIcon } from '../../components/icons';
 interface ExtractedUser {
     id: number; // internal UI id
     userName: string;
-    cedula: string;
+    cedulaPrefix: string; // New: V, E, P, etc.
+    cedulaNumber: string; // New: Only numbers
     email: string;
     phoneNumber: string;
     roleID: number;
@@ -22,12 +23,16 @@ interface ExtractedUser {
     isEmailManuallyEdited: boolean; // To track if the email was touched by the user
 }
 
+const CEDULA_PREFIXES = ['V', 'E', 'J', 'P', 'G', 'M'];
+
 const BulkUserCreationPage: React.FC = () => {
     const { user: authUser, hasPermission } = useAuth();
     const navigate = useNavigate();
     
     const [step, setStep] = useState<'upload' | 'review'>('upload');
+    const [inputMode, setInputMode] = useState<'file' | 'text'>('file');
     const [file, setFile] = useState<File | null>(null);
+    const [inputText, setInputText] = useState('');
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [error, setError] = useState('');
@@ -46,8 +51,8 @@ const BulkUserCreationPage: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const canAccess = useMemo(() => {
-        return authUser?.schoolId === 5 && hasPermission([6]);
-    }, [authUser, hasPermission]);
+        return hasPermission([6, 7]);
+    }, [hasPermission]);
 
     if (!authUser) {
         // Still loading auth context, show a loader
@@ -58,7 +63,7 @@ const BulkUserCreationPage: React.FC = () => {
         return (
             <div className="text-center p-8 bg-surface rounded-lg shadow-md">
                 <h1 className="text-2xl font-bold text-danger">Acceso Denegado</h1>
-                <p className="text-secondary mt-2">Esta funcionalidad solo está disponible para administradores del colegio con ID 5.</p>
+                <p className="text-secondary mt-2">Esta funcionalidad solo está disponible para usuarios con rol de Administrador o Super Admin.</p>
                 <Link to="/dashboard" className="mt-4 inline-block bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 transition-colors">
                     Volver al Inicio
                 </Link>
@@ -126,9 +131,9 @@ const BulkUserCreationPage: React.FC = () => {
         });
     };
 
-    // --- Helper logic for Email Generation ---
-    const generateEmailFromData = (name: string, cedula: string, domain: string): string => {
-        if (!name || !cedula) return '';
+    // --- Helper logic ---
+    const generateEmailFromData = (name: string, cedulaNumber: string, domain: string): string => {
+        if (!name || !cedulaNumber) return '';
         
         // Normalize to remove accents (e.g., José -> Jose)
         const cleanName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/[^a-z\s]/g, '');
@@ -136,14 +141,42 @@ const BulkUserCreationPage: React.FC = () => {
         const firstName = parts[0] || 'usuario';
         const lastName = parts.length > 1 ? parts[1] : '';
         
-        const cleanCedula = cedula.replace(/[^0-9]/g, '');
+        const cleanCedula = cedulaNumber.replace(/[^0-9]/g, '');
         const lastTwoDigits = cleanCedula.length >= 2 ? cleanCedula.slice(-2) : '00';
         
         return `${firstName}${lastName}${lastTwoDigits}@${domain}.com`;
     };
     
     const checkValidity = (u: Partial<ExtractedUser>): boolean => {
-        return !!((u.userName || '').trim() && (u.cedula || '').trim() && (u.email || '').trim());
+        return !!((u.userName || '').trim() && (u.cedulaNumber || '').trim() && (u.email || '').trim());
+    };
+
+    // Name formatting helpers
+    const toTitleCase = (str: string) => {
+        return str.toLowerCase().replace(/(?:^|\s|['"([{])+\S/g, (match) => match.toUpperCase());
+    };
+
+    const applyNameFormat = (format: 'uppercase' | 'lowercase' | 'capitalize') => {
+        setExtractedUsers(prev => prev.map(u => {
+            let newName = u.userName;
+            if (format === 'uppercase') newName = u.userName.toUpperCase();
+            if (format === 'lowercase') newName = u.userName.toLowerCase();
+            if (format === 'capitalize') newName = toTitleCase(u.userName);
+            
+            // Check if email needs update after name change
+            let newEmail = u.email;
+            if (autoGenerateEmail && !u.isEmailManuallyEdited) {
+                newEmail = generateEmailFromData(newName, u.cedulaNumber, customEmailDomain);
+            }
+
+            return { ...u, userName: newName, email: newEmail, isValid: checkValidity({ ...u, userName: newName, email: newEmail }) };
+        }));
+    };
+
+    const applyGlobalRole = (roleIdStr: string) => {
+        const roleId = Number(roleIdStr);
+        if (!roleId) return;
+        setExtractedUsers(prev => prev.map(u => ({ ...u, roleID: roleId })));
     };
 
     // Effect to apply auto-generation when toggled ON or domain changes in review step
@@ -155,7 +188,7 @@ const BulkUserCreationPage: React.FC = () => {
             let needsUpdate = false;
     
             if (autoGenerateEmail && !u.isEmailManuallyEdited) {
-                const potentialNewEmail = generateEmailFromData(u.userName, u.cedula, customEmailDomain);
+                const potentialNewEmail = generateEmailFromData(u.userName, u.cedulaNumber, customEmailDomain);
                 if (potentialNewEmail !== u.email) {
                     newEmail = potentialNewEmail;
                     needsUpdate = true;
@@ -170,8 +203,32 @@ const BulkUserCreationPage: React.FC = () => {
         }));
     }, [autoGenerateEmail, customEmailDomain, step]);
 
+    const parseCedula = (rawCedula: string): { prefix: string, number: string } => {
+        if (!rawCedula) return { prefix: 'V', number: '' };
+        
+        const clean = rawCedula.toUpperCase().trim();
+        
+        // Match explicit prefixes like "V-1234", "E 1234", "P1234"
+        const match = clean.match(/^([VEJPGM])[- ]?(\d+)$/);
+        if (match) {
+            return { prefix: match[1], number: match[2] };
+        }
+        
+        // Just numbers? Default to V
+        const numsOnly = clean.replace(/[^0-9]/g, '');
+        if (numsOnly.length > 0) {
+            return { prefix: 'V', number: numsOnly };
+        }
+
+        return { prefix: 'V', number: '' };
+    };
+
     const analyzeFile = async () => {
-        if (!file) return;
+        if (inputMode === 'file' && !file) return;
+        if (inputMode === 'text' && !inputText.trim()) {
+            setError("Por favor, ingrese el texto a analizar.");
+            return;
+        }
 
         setIsAnalyzing(true);
         setError('');
@@ -182,13 +239,19 @@ const BulkUserCreationPage: React.FC = () => {
             let contentPart: any;
             let promptText = "";
 
-            if (isExcel) {
-                 const csvData = await readExcelFile(file);
-                 contentPart = { text: `Datos extraídos del archivo Excel/CSV:\n${csvData}` };
-                 promptText = `Analiza los datos de texto (hoja de cálculo) y extrae usuarios.`;
+            if (inputMode === 'file' && file) {
+                if (isExcel) {
+                     const csvData = await readExcelFile(file);
+                     contentPart = { text: `Datos extraídos del archivo Excel/CSV:\n${csvData}` };
+                     promptText = `Analiza los datos de texto (hoja de cálculo) y extrae usuarios.`;
+                } else {
+                     contentPart = await fileToGenerativePart(file);
+                     promptText = `Analiza este documento visualmente y extrae la lista de personas.`;
+                }
             } else {
-                 contentPart = await fileToGenerativePart(file);
-                 promptText = `Analiza este documento visualmente y extrae la lista de personas.`;
+                // Text Mode
+                contentPart = { text: `TEXTO PROPORCIONADO POR EL USUARIO:\n${inputText}` };
+                promptText = "Analiza el texto proporcionado y extrae la lista de personas.";
             }
 
             const prompt = `
@@ -196,7 +259,7 @@ const BulkUserCreationPage: React.FC = () => {
                 Instrucciones CRÍTICAS:
                 1. Extrae: Nombre completo (userName), Cédula (cedula), Teléfono (phoneNumber), Rol (role).
                 2. **NO INVENTES DATOS.** Si un campo (email, cédula, teléfono) no aparece explícitamente en el documento, devuélvelo como null o string vacío "".
-                3. Si la cédula es solo números, agrega el prefijo "V-" por defecto. Si ya tiene letra, déjala igual.
+                3. Si la cédula tiene letra (V, E, P), inclúyela. Si no, devuelve solo el número.
                 4. Trata de inferir el rol (Estudiante, Profesor, Representante). Default: "Estudiante".
                 
                 Devuelve un JSON array puro.
@@ -206,7 +269,7 @@ const BulkUserCreationPage: React.FC = () => {
                 model: modelId,
                 contents: [
                     { text: prompt },
-                    isExcel ? contentPart : contentPart
+                    contentPart
                 ],
                 config: {
                     responseMimeType: "application/json",
@@ -238,17 +301,21 @@ const BulkUserCreationPage: React.FC = () => {
                 if (roleStr.includes('profesor') || roleStr.includes('docente')) roleID = 2;
                 if (roleStr.includes('representante') || roleStr.includes('padre')) roleID = 3;
                 
+                // Parse Cedula
+                const { prefix, number } = parseCedula(u.cedula || '');
+
                 let email = u.email || '';
                 const isEmailManuallyEdited = !!email;
 
                 if (!email && autoGenerateEmail) {
-                    email = generateEmailFromData(u.userName, u.cedula, customEmailDomain);
+                    email = generateEmailFromData(u.userName, number, customEmailDomain);
                 }
 
                 const userObj: ExtractedUser = {
                     id: Date.now() + index,
                     userName: u.userName || '',
-                    cedula: u.cedula || '',
+                    cedulaPrefix: prefix,
+                    cedulaNumber: number,
                     email: email,
                     phoneNumber: u.phoneNumber || '',
                     roleID: roleID,
@@ -264,7 +331,7 @@ const BulkUserCreationPage: React.FC = () => {
 
         } catch (err: any) {
             console.error("AI Error:", err);
-            setError("Ocurrió un error al analizar el archivo. Intente con una imagen más clara o un archivo válido.");
+            setError("Ocurrió un error al analizar la información. Intente con datos más claros.");
         } finally {
             setIsAnalyzing(false);
         }
@@ -285,9 +352,9 @@ const BulkUserCreationPage: React.FC = () => {
                     updatedUser.isEmailManuallyEdited = true;
                 } 
                 // If auto-generation is on and name/cedula changes, update email *only if not manually locked*
-                else if (autoGenerateEmail && (field === 'userName' || field === 'cedula')) {
+                else if (autoGenerateEmail && (field === 'userName' || field === 'cedulaNumber')) {
                     if (!updatedUser.isEmailManuallyEdited) {
-                        updatedUser.email = generateEmailFromData(updatedUser.userName, updatedUser.cedula, customEmailDomain);
+                        updatedUser.email = generateEmailFromData(updatedUser.userName, updatedUser.cedulaNumber, customEmailDomain);
                     }
                 }
                 
@@ -307,7 +374,8 @@ const BulkUserCreationPage: React.FC = () => {
         const newUser: ExtractedUser = {
             id: Date.now(),
             userName: '',
-            cedula: 'V-',
+            cedulaPrefix: 'V',
+            cedulaNumber: '',
             email: '',
             phoneNumber: '',
             roleID: 1,
@@ -337,13 +405,13 @@ const BulkUserCreationPage: React.FC = () => {
 
         for (const u of extractedUsers) {
             try {
-                // Determine password, stripping any prefixes from cedula
-                const cedulaNumberOnly = u.cedula.trim().replace(/[^0-9]/g, '');
-                const password = useCedulaAsPassword && cedulaNumberOnly ? cedulaNumberOnly : "123456";
+                // Re-assemble cedula string
+                const finalCedula = `${u.cedulaPrefix}-${u.cedulaNumber}`;
+                const password = useCedulaAsPassword && u.cedulaNumber ? u.cedulaNumber : "123456";
 
                 await apiService.createUser({
                     userName: u.userName,
-                    cedula: u.cedula,
+                    cedula: finalCedula,
                     email: u.email,
                     phoneNumber: u.phoneNumber,
                     roleID: u.roleID,
@@ -403,6 +471,7 @@ const BulkUserCreationPage: React.FC = () => {
                                     setStep('upload');
                                     setExtractedUsers([]);
                                     setFile(null);
+                                    setInputText('');
                                     setImagePreview(null);
                                     setCreationStatus(null);
                                     setError('');
@@ -419,46 +488,77 @@ const BulkUserCreationPage: React.FC = () => {
 
             {step === 'upload' && (
                 <div className="max-w-xl mx-auto bg-surface p-8 rounded-lg shadow-md text-center">
-                    <div className="mb-6">
-                        <p className="text-text-secondary mb-4">
-                            Sube una imagen, PDF o archivo Excel (.xls, .xlsx) que contenga una lista de usuarios.
-                            La IA extraerá los datos automáticamente.
-                        </p>
-                        
-                        <div 
-                            className="border-2 border-dashed border-primary/50 rounded-lg p-10 cursor-pointer hover:bg-background transition-colors"
-                            onClick={() => fileInputRef.current?.click()}
+                    <div className="flex border-b border-border mb-6">
+                        <button 
+                            className={`flex-1 py-2 text-center font-medium text-lg ${inputMode === 'file' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary hover:text-text-primary'}`}
+                            onClick={() => setInputMode('file')}
                         >
-                            <input 
-                                type="file" 
-                                ref={fileInputRef} 
-                                className="hidden" 
-                                accept="image/*,application/pdf,.xlsx,.xls,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" 
-                                onChange={handleFileChange} 
-                            />
-                            {imagePreview ? (
-                                <img src={imagePreview} alt="Preview" className="max-h-64 mx-auto rounded shadow" />
-                            ) : isExcel ? (
-                                <div>
-                                    <ExcelIcon />
-                                    <div className="text-primary font-bold">{file?.name}</div>
+                            Subir Archivo
+                        </button>
+                        <button 
+                            className={`flex-1 py-2 text-center font-medium text-lg ${inputMode === 'text' ? 'border-b-2 border-primary text-primary' : 'text-text-secondary hover:text-text-primary'}`}
+                            onClick={() => setInputMode('text')}
+                        >
+                            Pegar Texto
+                        </button>
+                    </div>
+
+                    <div className="mb-6">
+                        {inputMode === 'file' ? (
+                            <>
+                                <p className="text-text-secondary mb-4 text-center">
+                                    Sube una imagen, PDF o archivo Excel (.xls, .xlsx) que contenga una lista de usuarios.
+                                </p>
+                                <div 
+                                    className="border-2 border-dashed border-primary/50 rounded-lg p-10 cursor-pointer hover:bg-background transition-colors"
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef} 
+                                        className="hidden" 
+                                        accept="image/*,application/pdf,.xlsx,.xls,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" 
+                                        onChange={handleFileChange} 
+                                    />
+                                    {imagePreview ? (
+                                        <img src={imagePreview} alt="Preview" className="max-h-64 mx-auto rounded shadow" />
+                                    ) : isExcel ? (
+                                        <div>
+                                            <ExcelIcon />
+                                            <div className="text-primary font-bold">{file?.name}</div>
+                                        </div>
+                                    ) : file ? (
+                                        <div className="text-primary font-bold">{file.name}</div>
+                                    ) : (
+                                        <div className="text-text-tertiary">
+                                            <span className="block text-4xl mb-2">📂</span>
+                                            Haz clic para seleccionar un archivo
+                                        </div>
+                                    )}
                                 </div>
-                            ) : file ? (
-                                <div className="text-primary font-bold">{file.name}</div>
-                            ) : (
-                                <div className="text-text-tertiary">
-                                    <span className="block text-4xl mb-2">📂</span>
-                                    Haz clic para seleccionar un archivo
-                                </div>
-                            )}
-                        </div>
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-text-secondary mb-4 text-center">
+                                    Pega aquí la lista de usuarios (Nombre, Cédula, Email, etc.).
+                                </p>
+                                <textarea
+                                    className="w-full p-4 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-accent/50 text-sm h-60"
+                                    placeholder="Ejemplo:
+Juan Perez, V-12345678, juan@example.com, Estudiante
+Maria Rodriguez, V-87654321, maria@example.com, Profesor"
+                                    value={inputText}
+                                    onChange={e => setInputText(e.target.value)}
+                                />
+                            </>
+                        )}
                     </div>
 
                     {error && <p className="text-danger mb-4">{error}</p>}
 
                     <button 
                         onClick={analyzeFile} 
-                        disabled={!file || isAnalyzing}
+                        disabled={(inputMode === 'file' && !file) || (inputMode === 'text' && !inputText) || isAnalyzing}
                         className="w-full bg-primary text-text-on-primary py-3 rounded-lg font-bold text-lg hover:bg-opacity-90 disabled:bg-secondary flex justify-center items-center"
                     >
                         {isAnalyzing ? (
@@ -473,33 +573,59 @@ const BulkUserCreationPage: React.FC = () => {
             {step === 'review' && (
                 <div>
                     {/* Top Toolbar */}
-                    <div className="bg-surface p-4 rounded-lg shadow-sm border border-border mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                            <label className="flex items-center cursor-pointer" title="Si falta el email, se generará uno automáticamente">
-                                <input type="checkbox" checked={autoGenerateEmail} onChange={e => setAutoGenerateEmail(e.target.checked)} className="mr-2 h-4 w-4 text-primary focus:ring-accent"/>
-                                <span className="text-sm font-medium text-text-primary">Autogenerar Email</span>
-                            </label>
+                    <div className="bg-surface p-4 rounded-lg shadow-sm border border-border mb-6">
+                        {/* Row 1: Global Configurations */}
+                        <div className="flex flex-wrap justify-between items-center gap-4 border-b border-border pb-4 mb-4">
+                            <div className="flex flex-wrap items-center gap-6">
+                                <label className="flex items-center cursor-pointer" title="Si falta el email, se generará uno automáticamente">
+                                    <input type="checkbox" checked={autoGenerateEmail} onChange={e => setAutoGenerateEmail(e.target.checked)} className="mr-2 h-4 w-4 text-primary focus:ring-accent"/>
+                                    <span className="text-sm font-medium text-text-primary">Autogenerar Email</span>
+                                </label>
 
-                            <div className="flex items-center gap-1">
-                                <span className="text-sm font-medium text-text-primary">@</span>
-                                <input 
-                                    type="text" 
-                                    value={customEmailDomain} 
-                                    onChange={e => setCustomEmailDomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                                    className="p-1 border border-border rounded text-sm w-32 disabled:bg-background disabled:text-text-tertiary"
-                                    aria-label="Dominio de email personalizado"
-                                    disabled={!autoGenerateEmail}
-                                />
-                                <span className="text-sm font-medium text-text-primary">.com</span>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-sm font-medium text-text-primary">@</span>
+                                    <input 
+                                        type="text" 
+                                        value={customEmailDomain} 
+                                        onChange={e => setCustomEmailDomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                                        className="p-1 border border-border rounded text-sm w-32 disabled:bg-background disabled:text-text-tertiary"
+                                        aria-label="Dominio de email personalizado"
+                                        disabled={!autoGenerateEmail}
+                                    />
+                                    <span className="text-sm font-medium text-text-primary">.com</span>
+                                </div>
+
+                                <label className="flex items-center cursor-pointer" title="La contraseña será igual a la cédula del usuario (solo números)">
+                                    <input type="checkbox" checked={useCedulaAsPassword} onChange={e => setUseCedulaAsPassword(e.target.checked)} className="mr-2 h-4 w-4 text-primary focus:ring-accent"/>
+                                    <span className="text-sm font-medium text-text-primary">Usar Cédula como Contraseña</span>
+                                </label>
                             </div>
-
-                            <label className="flex items-center cursor-pointer" title="La contraseña será igual a la cédula del usuario (solo números)">
-                                <input type="checkbox" checked={useCedulaAsPassword} onChange={e => setUseCedulaAsPassword(e.target.checked)} className="mr-2 h-4 w-4 text-primary focus:ring-accent"/>
-                                <span className="text-sm font-medium text-text-primary">Usar Cédula como Contraseña</span>
-                            </label>
+                            <div className="flex gap-2">
+                                <button onClick={addUser} type="button" className="bg-info text-white px-3 py-2 rounded hover:bg-info-dark cursor-pointer">+ Agregar Manual</button>
+                            </div>
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={addUser} type="button" className="bg-info text-white px-3 py-2 rounded hover:bg-info-dark cursor-pointer">+ Agregar Manual</button>
+
+                        {/* Row 2: Bulk Actions */}
+                        <div className="flex flex-wrap items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-text-secondary">Asignar Rol a Todos:</span>
+                                <select 
+                                    className="p-1 border border-border rounded bg-background text-text-primary text-sm"
+                                    onChange={(e) => applyGlobalRole(e.target.value)}
+                                >
+                                    <option value="">-- Seleccionar --</option>
+                                    {ROLES.map(r => (
+                                        <option key={r.id} value={r.id}>{r.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 border-l border-border pl-4">
+                                <span className="text-sm font-bold text-text-secondary">Formato Nombres:</span>
+                                <button onClick={() => applyNameFormat('uppercase')} className="px-2 py-1 bg-background border border-border rounded text-xs hover:bg-border" title="MAYÚSCULAS">AA</button>
+                                <button onClick={() => applyNameFormat('lowercase')} className="px-2 py-1 bg-background border border-border rounded text-xs hover:bg-border" title="minúsculas">aa</button>
+                                <button onClick={() => applyNameFormat('capitalize')} className="px-2 py-1 bg-background border border-border rounded text-xs hover:bg-border" title="Nombre Propio">Aa</button>
+                            </div>
                         </div>
                     </div>
 
@@ -551,17 +677,29 @@ const BulkUserCreationPage: React.FC = () => {
                                                 placeholder="Requerido"
                                             />
                                         </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <label className="block text-xs font-bold text-text-secondary uppercase">Cédula</label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <div className="col-span-1">
+                                                <label className="block text-xs font-bold text-text-secondary uppercase">Prefijo</label>
+                                                <select 
+                                                    value={u.cedulaPrefix}
+                                                    onChange={(e) => handleUserChange(u.id, 'cedulaPrefix', e.target.value)}
+                                                    className="w-full p-1 bg-transparent border-b border-border focus:border-accent focus:outline-none text-text-primary"
+                                                >
+                                                    {CEDULA_PREFIXES.map(p => <option key={p} value={p}>{p}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="col-span-2">
+                                                <label className="block text-xs font-bold text-text-secondary uppercase">Nº Cédula</label>
                                                 <input 
                                                     type="text" 
-                                                    value={u.cedula} 
-                                                    onChange={(e) => handleUserChange(u.id, 'cedula', e.target.value)}
-                                                    className={`w-full p-1 bg-transparent border-b focus:outline-none text-text-primary ${!u.cedula.trim() ? 'border-danger' : 'border-border focus:border-accent'}`}
-                                                    placeholder="Requerido"
+                                                    value={u.cedulaNumber} 
+                                                    onChange={(e) => handleUserChange(u.id, 'cedulaNumber', e.target.value.replace(/[^0-9]/g, ''))}
+                                                    className={`w-full p-1 bg-transparent border-b focus:outline-none text-text-primary ${!u.cedulaNumber.trim() ? 'border-danger' : 'border-border focus:border-accent'}`}
+                                                    placeholder="Solo números"
                                                 />
                                             </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
                                             <div>
                                                 <label className="block text-xs font-bold text-text-secondary uppercase">Teléfono</label>
                                                 <input 
@@ -571,6 +709,18 @@ const BulkUserCreationPage: React.FC = () => {
                                                     className="w-full p-1 bg-transparent border-b border-border focus:border-accent focus:outline-none text-text-primary"
                                                     placeholder="Opcional"
                                                 />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-text-secondary uppercase">Rol</label>
+                                                <select 
+                                                    value={u.roleID} 
+                                                    onChange={(e) => handleUserChange(u.id, 'roleID', Number(e.target.value))}
+                                                    className="w-full p-1 bg-transparent border-b border-border focus:border-accent focus:outline-none text-text-primary"
+                                                >
+                                                    {ROLES.map(r => (
+                                                        <option key={r.id} value={r.id}>{r.name}</option>
+                                                    ))}
+                                                </select>
                                             </div>
                                         </div>
                                         <div>
@@ -582,18 +732,6 @@ const BulkUserCreationPage: React.FC = () => {
                                                 className={`w-full p-1 bg-transparent border-b focus:outline-none text-text-primary ${!u.email.trim() ? 'border-danger' : 'border-border focus:border-accent'}`}
                                                 placeholder="Requerido"
                                             />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-text-secondary uppercase">Rol</label>
-                                            <select 
-                                                value={u.roleID} 
-                                                onChange={(e) => handleUserChange(u.id, 'roleID', Number(e.target.value))}
-                                                className="w-full p-1 bg-transparent border-b border-border focus:border-accent focus:outline-none text-text-primary"
-                                            >
-                                                {ROLES.filter(r => [1, 2, 3].includes(r.id)).map(r => (
-                                                    <option key={r.id} value={r.id}>{r.name}</option>
-                                                ))}
-                                            </select>
                                         </div>
                                     </div>
                                 </div>
