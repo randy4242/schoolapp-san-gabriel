@@ -3,8 +3,8 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
-import { Certificate, User } from '../../types';
-import { DocumentTextIcon, XIcon, ClipboardCheckIcon } from '../../components/icons';
+import { Certificate, User, Classroom } from '../../types';
+import { DocumentTextIcon, XIcon, ClipboardCheckIcon, EyeIcon, PencilAltIcon, TrashIcon } from '../../components/icons';
 import Modal from '../../components/Modal';
 
 // Helpers
@@ -23,16 +23,26 @@ const cleanContent = (content: string | undefined | null) => {
         .trim();
 };
 
+// Helper to remove [Internal Tags] from classroom names for display
+const cleanClassroomName = (name: string) => {
+    return name.replace(/^\[.*?\]\s*/, '');
+};
+
 const BoletaListPage: React.FC = () => {
     const [certificates, setCertificates] = useState<Certificate[]>([]);
     const [students, setStudents] = useState<User[]>([]);
+    const [classrooms, setClassrooms] = useState<Classroom[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const { user, hasPermission } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
+    
+    // Filters
     const [searchTerm, setSearchTerm] = useState('');
     const [salonFilter, setSalonFilter] = useState<string>('');
+    const [sectionFilter, setSectionFilter] = useState<string>('');
+    const [statusFilter, setStatusFilter] = useState<string>(''); // Filter: Pending, Approved, Rejected
     const [highlightId, setHighlightId] = useState<number | null>(null);
     
     const [boletaToDelete, setBoletaToDelete] = useState<Certificate | null>(null);
@@ -79,7 +89,6 @@ const BoletaListPage: React.FC = () => {
                 setError('');
 
                 // 1. Fetch Certificates
-                // NOTE: The backend controller must be updated to allow parents to see children's certs.
                 const certData = await apiService.getCertificates(user.schoolId);
                 setCertificates(certData.filter(c => c.certificateType === 'Boleta'));
 
@@ -87,26 +96,31 @@ const BoletaListPage: React.FC = () => {
                 let studentData: User[] = [];
                 try {
                     if (isParent) {
-                        // Parents might not have permission to list ALL students, fetch only children
                         const children = await apiService.getChildrenOfParent(user.userId, user.schoolId);
                         studentData = children.map(c => ({
                             userID: c.userID,
                             userName: c.userName,
                             email: c.email,
-                            roleID: 1, // Dummy role
+                            roleID: 1, 
                             schoolID: user.schoolId,
                             isBlocked: false,
                             cedula: null,
                             phoneNumber: null
                         }));
                     } else {
-                        // Admins/Teachers fetch everyone
                         studentData = await apiService.getStudents(user.schoolId);
                     }
                     setStudents(studentData);
                 } catch (e) {
                     console.warn("Could not load student list details:", e);
-                    // Don't block the UI if student list fails, we just won't have names mapped
+                }
+
+                // 3. Fetch Classrooms (For Section Filtering)
+                try {
+                    const classData = await apiService.getClassrooms(user.schoolId);
+                    setClassrooms(classData);
+                } catch (e) {
+                    console.warn("Could not load classrooms:", e);
                 }
 
             } catch (err) {
@@ -126,6 +140,26 @@ const BoletaListPage: React.FC = () => {
     const studentMap = useMemo(() => {
         return new Map(students.map(s => [s.userID, s.userName]));
     }, [students]);
+
+    // Map Classroom ID -> Classroom Name for quick lookup
+    const classroomNameMap = useMemo(() => {
+        return new Map(classrooms.map(c => [c.classroomID, c.name]));
+    }, [classrooms]);
+
+    // Map Student ID -> Classroom Name (Current assignment) - CLEANED NAME
+    const studentClassroomMap = useMemo(() => {
+        const map = new Map<number, string>();
+        students.forEach(s => {
+            if (s.classroomID) {
+                const clsName = classroomNameMap.get(s.classroomID);
+                if (clsName) {
+                    // Remove internal tags like [Primer Grado]
+                    map.set(s.userID, cleanClassroomName(clsName));
+                }
+            }
+        });
+        return map;
+    }, [students, classroomNameMap]);
 
     const uniqueSalons = useMemo(() => {
         const salons = new Set<string>();
@@ -148,26 +182,24 @@ const BoletaListPage: React.FC = () => {
 
         try {
             await apiService.deleteCertificate(boletaToDelete.certificateId, user.schoolId);
-            fetchData(); // Refresh the list
-            setBoletaToDelete(null); // Close the modal
+            fetchData(); 
+            setBoletaToDelete(null); 
         } catch (err) {
             setError('Error al eliminar la boleta.');
             console.error(err);
-            setBoletaToDelete(null); // Close modal even on error
+            setBoletaToDelete(null); 
         }
     };
 
     const handleView = (certificate: Certificate) => {
-        // Resolve student name if missing
         const resolvedName = certificate.studentName || studentMap.get(certificate.userId) || 'N/A';
         const certWithStudent = { ...certificate, studentName: resolvedName };
-        
         navigate('/report-viewer', { state: { reportData: certWithStudent, reportType: 'boleta' } });
     };
 
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString('es-ES', {
-            year: 'numeric', month: 'long', day: 'numeric'
+            year: '2-digit', month: '2-digit', day: '2-digit'
         });
     }
     
@@ -200,12 +232,12 @@ const BoletaListPage: React.FC = () => {
                 signatoryTitle: boletaToApprove.signatoryTitle || '',
                 content: newContent,
                 schoolId: user.schoolId,
-                issueDate: boletaToApprove.issueDate // Include original issue date
+                issueDate: boletaToApprove.issueDate
             };
             
             await apiService.updateCertificate(boletaToApprove.certificateId, payload);
 
-            // Notify creator if they exist and are not the current user
+            // Notify creator
             if (contentJson.createdBy && contentJson.createdBy !== user.userId) {
                 const studentName = studentMap.get(boletaToApprove.userId) || 'Estudiante';
                 try {
@@ -224,7 +256,7 @@ const BoletaListPage: React.FC = () => {
             setApproveModalOpen(false);
         } catch (e) {
             console.error(e);
-            setError("Error al aprobar la boleta. Verifique la conexión o intente nuevamente.");
+            setError("Error al aprobar la boleta.");
         } finally {
             setActionLoading(false);
             setBoletaToApprove(null);
@@ -250,7 +282,6 @@ const BoletaListPage: React.FC = () => {
                 contentJson = JSON.parse(rawContent);
             } catch (e) {}
             
-            // Always set to rejected state with prefix
             const newContent = `[BOLETA_RECHAZADA]${rawContent}`;
 
             const payload = {
@@ -260,7 +291,7 @@ const BoletaListPage: React.FC = () => {
                 signatoryTitle: boletaToReject.signatoryTitle || '',
                 content: newContent, 
                 schoolId: user.schoolId,
-                issueDate: boletaToReject.issueDate // Include original issue date
+                issueDate: boletaToReject.issueDate
             };
             await apiService.updateCertificate(boletaToReject.certificateId, payload);
 
@@ -294,13 +325,12 @@ const BoletaListPage: React.FC = () => {
         return certificates.filter(c => {
             const status = getStatus(c.content);
 
-            // 1. Parent Filtering Logic
+            // 1. Parent Filtering
             if (isParent) {
-                // Parents can only see APPROVED boletas
                 if (status !== 'Approved') return false;
             }
 
-            // 2. Teacher View Logic (if not super admin and not parent)
+            // 2. Teacher View Logic
             let createdBy = 0;
             try {
                 const clean = cleanContent(c.content);
@@ -314,12 +344,17 @@ const BoletaListPage: React.FC = () => {
                 if (createdBy) return false; 
             }
 
-            // 3. Search Filter
+            // 3. Status Filter (New)
+            if (statusFilter && status !== statusFilter) {
+                return false;
+            }
+
+            // 4. Search Filter
             const lowerTerm = searchTerm.toLowerCase();
             const name = c.studentName || studentMap.get(c.userId) || '';
             const nameMatch = name.toLowerCase().includes(lowerTerm);
 
-            // 4. Salon Filter
+            // 5. Salon Level Filter
             let level = '';
             try {
                 const clean = cleanContent(c.content);
@@ -330,14 +365,21 @@ const BoletaListPage: React.FC = () => {
             } catch (e) {}
             const salonMatch = !salonFilter || level === salonFilter;
 
-            // 5. Highlight filter (if present, prioritize it but still apply permissions)
+            // 6. Section Filter
+            let sectionMatch = true;
+            if (sectionFilter) {
+                const currentClassroomName = studentClassroomMap.get(c.userId) || '';
+                sectionMatch = currentClassroomName.toLowerCase().includes(sectionFilter.toLowerCase());
+            }
+
+            // 7. Highlight Filter
             if (highlightId) {
                 return c.certificateId === highlightId;
             }
 
-            return nameMatch && salonMatch;
+            return nameMatch && salonMatch && sectionMatch;
         });
-    }, [certificates, searchTerm, salonFilter, studentMap, isSuperAdmin, isParent, user, highlightId]);
+    }, [certificates, searchTerm, salonFilter, sectionFilter, statusFilter, studentMap, studentClassroomMap, isSuperAdmin, isParent, user, highlightId]);
 
     if (!canManage) {
         return <p className="text-danger p-4">No tienes permisos para ver esta sección.</p>;
@@ -372,22 +414,47 @@ const BoletaListPage: React.FC = () => {
             <div className="flex flex-col md:flex-row gap-4 mb-4">
                 <input
                     type="text"
-                    placeholder="Buscar por nombre del estudiante..."
+                    placeholder="Buscar por nombre..."
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
                     disabled={!!highlightId}
-                    className="w-full md:w-1/2 p-2 border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:bg-background disabled:opacity-50"
+                    className="w-full md:w-1/4 p-2 border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:bg-background disabled:opacity-50"
                 />
+                
+                {/* Salon / Nivel Filter */}
                 <select
                     value={salonFilter}
                     onChange={e => setSalonFilter(e.target.value)}
                     disabled={!!highlightId}
                     className="w-full md:w-1/4 p-2 border border-border rounded bg-surface focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:bg-background disabled:opacity-50"
                 >
-                    <option value="">Todos los Salones</option>
+                    <option value="">Nivel: Todos</option>
                     {uniqueSalons.map(salon => (
                         <option key={salon} value={salon}>{salon}</option>
                     ))}
+                </select>
+
+                {/* Section / Letter Filter */}
+                <input
+                    type="text"
+                    placeholder="Sección/Letra (ej: A)"
+                    value={sectionFilter}
+                    onChange={e => setSectionFilter(e.target.value)}
+                    disabled={!!highlightId}
+                    className="w-full md:w-1/4 p-2 border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:bg-background disabled:opacity-50"
+                />
+
+                {/* Status Filter */}
+                <select
+                    value={statusFilter}
+                    onChange={e => setStatusFilter(e.target.value)}
+                    disabled={!!highlightId}
+                    className="w-full md:w-1/4 p-2 border border-border rounded bg-surface focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:bg-background disabled:opacity-50"
+                >
+                    <option value="">Estado: Todas</option>
+                    <option value="Pending">Pendiente</option>
+                    <option value="Approved">Aprobada</option>
+                    <option value="Rejected">Rechazada</option>
                 </select>
             </div>
 
@@ -397,14 +464,15 @@ const BoletaListPage: React.FC = () => {
             {!loading && !error && (
                 certificates.length > 0 ? (
                     <div className="bg-surface shadow-md rounded-lg overflow-x-auto">
-                        <table className="min-w-full divide-y divide-border">
+                        <table className="min-w-full divide-y divide-border text-sm">
                             <thead className="bg-header">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Estudiante</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Fecha</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Salon</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Estado</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase">Acciones</th>
+                                    <th className="px-4 py-2 text-left font-medium text-text-on-primary uppercase">Estudiante</th>
+                                    <th className="px-4 py-2 text-left font-medium text-text-on-primary uppercase">Fecha</th>
+                                    <th className="px-4 py-2 text-left font-medium text-text-on-primary uppercase">Nivel</th>
+                                    <th className="px-4 py-2 text-left font-medium text-text-on-primary uppercase">Sección</th>
+                                    <th className="px-4 py-2 text-left font-medium text-text-on-primary uppercase">Estado</th>
+                                    <th className="px-4 py-2 text-left font-medium text-text-on-primary uppercase w-1">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-surface divide-y divide-border">
@@ -420,15 +488,16 @@ const BoletaListPage: React.FC = () => {
                                     } catch (e) {}
                                     
                                     const studentName = cert.studentName || studentMap.get(cert.userId) || 'N/A';
+                                    const currentSection = studentClassroomMap.get(cert.userId) || '—';
                                     const isHighlighted = highlightId === cert.certificateId;
 
                                     let statusBadge;
                                     if (status === 'Approved') {
-                                        statusBadge = <span className="px-2 py-1 rounded-full text-xs font-bold bg-success-light text-success-text">Aprobada</span>;
+                                        statusBadge = <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-success-light text-success-text">Aprobada</span>;
                                     } else if (status === 'Rejected') {
-                                        statusBadge = <span className="px-2 py-1 rounded-full text-xs font-bold bg-danger-light text-danger-text">Rechazada</span>;
+                                        statusBadge = <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-danger-light text-danger-text">Rechazada</span>;
                                     } else {
-                                        statusBadge = <span className="px-2 py-1 rounded-full text-xs font-bold bg-warning/20 text-warning-dark">Pendiente</span>;
+                                        statusBadge = <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-warning/20 text-warning-dark">Pendiente</span>;
                                     }
 
                                     return (
@@ -437,26 +506,47 @@ const BoletaListPage: React.FC = () => {
                                             ref={isHighlighted ? highlightRef : null}
                                             className={`hover:bg-background transition-colors ${isHighlighted ? 'bg-yellow-100 border-l-4 border-warning' : ''}`}
                                         >
-                                            <td className="px-6 py-4 whitespace-nowrap font-medium text-text-primary">{studentName}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-secondary">{formatDate(cert.issueDate)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-secondary">{level}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
+                                            <td className="px-4 py-2 whitespace-nowrap font-medium text-text-primary">{studentName}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-secondary text-xs">{formatDate(cert.issueDate)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-secondary text-xs">{level}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-secondary text-xs">{currentSection}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap">
                                                 {statusBadge}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                <div className="flex items-center space-x-4">
-                                                    <button onClick={() => handleView(cert)} className="text-info hover:text-info-dark font-medium">Ver</button>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
+                                                <div className="flex items-center space-x-2">
+                                                    <button 
+                                                        onClick={() => handleView(cert)} 
+                                                        className="text-info hover:text-info-dark p-1 rounded hover:bg-info-light/20"
+                                                        title="Ver Boleta"
+                                                    >
+                                                        <EyeIcon className="w-5 h-5" />
+                                                    </button>
+                                                    
                                                     {canEdit && (
                                                         <>
-                                                            <Link to={`/boletas/edit/${cert.certificateId}`} className="text-warning hover:text-warning-dark font-medium">Editar</Link>
-                                                            <button onClick={() => setBoletaToDelete(cert)} className="text-danger hover:text-danger-text font-medium">Eliminar</button>
+                                                            <Link 
+                                                                to={`/boletas/edit/${cert.certificateId}`} 
+                                                                className="text-warning hover:text-warning-dark p-1 rounded hover:bg-warning/10"
+                                                                title="Editar Boleta"
+                                                            >
+                                                                <PencilAltIcon className="w-5 h-5" />
+                                                            </Link>
+                                                            <button 
+                                                                onClick={() => setBoletaToDelete(cert)} 
+                                                                className="text-danger hover:text-danger-text p-1 rounded hover:bg-danger-light/20"
+                                                                title="Eliminar Boleta"
+                                                            >
+                                                                <TrashIcon className="w-5 h-5" />
+                                                            </button>
                                                         </>
                                                     )}
+                                                    
                                                     {isSuperAdmin && status !== 'Approved' && (
                                                         <>
                                                             <button 
                                                                 onClick={() => openApproveModal(cert)} 
-                                                                className="text-success hover:text-success-text font-bold disabled:opacity-50 p-1 rounded hover:bg-success-light/20"
+                                                                className="text-success hover:text-success-text p-1 rounded hover:bg-success-light/20"
                                                                 title="Aprobar Boleta"
                                                             >
                                                                 <ClipboardCheckIcon className="w-5 h-5" />
@@ -464,7 +554,7 @@ const BoletaListPage: React.FC = () => {
                                                             {status !== 'Rejected' && (
                                                                 <button 
                                                                     onClick={() => openRejectModal(cert)} 
-                                                                    className="text-danger hover:text-danger-text font-bold disabled:opacity-50 p-1 rounded hover:bg-danger-light/20"
+                                                                    className="text-danger hover:text-danger-text p-1 rounded hover:bg-danger-light/20"
                                                                     title="Rechazar Boleta"
                                                                 >
                                                                     <XIcon className="w-5 h-5" />
@@ -478,8 +568,8 @@ const BoletaListPage: React.FC = () => {
                                     )
                                 }) : (
                                     <tr>
-                                        <td colSpan={5} className="px-6 py-4 text-center text-secondary">
-                                            {searchTerm || salonFilter || highlightId 
+                                        <td colSpan={6} className="px-6 py-4 text-center text-secondary">
+                                            {searchTerm || salonFilter || sectionFilter || statusFilter || highlightId 
                                                 ? 'No se encontraron boletas con los filtros actuales.' 
                                                 : 'No hay boletas disponibles.'}
                                         </td>

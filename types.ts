@@ -162,6 +162,7 @@ export interface Lapso {
 export interface StudentGradeItem {
     evaluacion: string;
     displayGrade: string | number;
+    gradeValue?: number | null;
     date: string | null;
     comments: string;
 }
@@ -215,6 +216,8 @@ export interface Evaluation {
     classroomID?: number | null;
     createdAt: string;
     lapsoID?: number | null;
+    isVirtual?: boolean; // Added for Virtual Classroom
+    virtualType?: number; // 1: Content, 2: Selection, 3: Task
 }
 
 export interface Grade {
@@ -1019,4 +1022,135 @@ export interface IndicatorSection {
     title: string;
     indicators: Indicator[];
     hasRecommendations?: boolean;
+}
+
+export interface GlobalSearchResult {
+    users: User[];
+    courses: Course[];
+    evaluations: Evaluation[];
+    classrooms: Classroom[];
+    extracurriculars: ExtracurricularActivity[];
+}
+
+// --- VIRTUAL CLASSROOM & CONTENT TYPES ---
+
+export interface QuestionOption {
+    optionID: number;
+    optionText: string;
+    isCorrect: boolean;
+}
+
+export interface Question {
+    questionID: number;
+    questionText: string;
+    questionType: 1 | 2 | 3; // 1: Open, 2: Multiple, 3: Task
+    points: number;
+    orderIndex: number;
+    options?: QuestionOption[];
+}
+
+export interface TakeExamEvaluation {
+    evaluationID: number;
+    title: string;
+    description: string;
+    questions: Question[];
+}
+
+export interface AnswerPayload {
+    questionID: number;
+    selectedOptionID?: number | null;
+    answerText?: string | null;
+}
+
+export interface EvaluationQnA {
+    qnaID: number;
+    questionText: string;
+    answerText: string | null;
+    createdAt: string;
+    answeredAt: string | null;
+    askedByUserId: number;
+}
+
+export interface SubmittedAnswer {
+    questionID: number;
+    questionText: string;
+    questionType: number;
+    points: number;
+    answerText: string | null;
+    selectedOptionID: number | null;
+    selectedOptionText: string | null;
+    isCorrect?: boolean;
+}
+
+export interface StudentSubmission {
+    submissionID: number;
+    studentID: number;
+    studentName: string;
+    submittedAt: string;
+    grade: number | null;
+    answers: SubmittedAnswer[];
+}
+
+// New Types for Detailed Submission
+export interface QuestionAnswerDetailOption {
+    optionID: number;
+    optionText: string;
+}
+
+export interface QuestionAnswerDetail {
+    questionID: number;
+    questionText: string;
+    questionType: number;
+    points: number;
+    orderIndex: number;
+    options: QuestionAnswerDetailOption[];
+    selectedOptionID?: number | null;
+    selectedOptionText?: string | null;
+    answerText?: string | null;
+    isCorrect?: boolean | null;
+}
+
+export interface ExamSubmissionDetail {
+    evaluationID: number;
+    userID: number;
+    studentName: string;
+    submittedAt: string;
+    questions: QuestionAnswerDetail[];
+}
+
+// Content Types
+export enum ContentType {
+  Text = 1,
+  File = 2,
+  Video = 3
+}
+
+export interface EvaluationContentFile {
+  fileID: number;
+  fileName: string;
+  fileUrl: string;
+  fileType: string;
+  fileSizeBytes: number;
+}
+
+export interface EvaluationContent {
+  contentID: number;
+  evaluationID: number;
+  title: string;
+  description: string | null;
+  contentType: ContentType;
+  textBody: string | null;
+  orderIndex: number;
+  isPublic: boolean;
+  createdAt: string;
+  files: EvaluationContentFile[];
+}
+
+export interface CreateContentDTO {
+  title: string;
+  description?: string;
+  contentType: ContentType;
+  textBody?: string;
+  orderIndex: number;
+  isPublic: boolean;
 }

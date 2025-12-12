@@ -1,29 +1,191 @@
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Type } from "@google/genai";
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../hooks/useAuth';
 import { apiService } from '../../services/apiService';
 import { geminiService } from '../../services/geminiService';
-import { ROLES } from '../../types';
-import { SpinnerIcon, UserCheckIcon, XIcon } from '../../components/icons';
+import { ROLES, User } from '../../types';
+import { SpinnerIcon, UserCheckIcon, XIcon, BlockIcon, PlusIcon, PencilAltIcon } from '../../components/icons';
 
-// Define the extracted data structure
+// --- TYPES ---
+
+type UserStatus = 'new' | 'duplicate' | 'to_verify';
+
 interface ExtractedUser {
     id: number; // internal UI id
     userName: string;
     cedulaPrefix: string; // New: V, E, P, etc.
-    cedulaNumber: string; // New: Only numbers
+    cedulaNumber: string; // New: Numbers + Letters allowed
     email: string;
     phoneNumber: string;
     roleID: number;
     isValid: boolean;
     creationError?: string; // To store backend errors per user
     isEmailManuallyEdited: boolean; // To track if the email was touched by the user
+    duplicateReason?: string; // New: "Cedula exists" or "Email exists"
+    status: UserStatus;
+    isBeingEdited?: boolean; // New: To track active typing state without moving lists
 }
 
 const CEDULA_PREFIXES = ['V', 'E', 'J', 'P', 'G', 'M'];
+
+// --- SUB-COMPONENTS (Defined OUTSIDE to prevent re-renders/focus loss) ---
+
+interface UserCardProps {
+    u: ExtractedUser;
+    onChange: (id: number, field: keyof ExtractedUser, value: any) => void;
+    onBlur: (id: number) => void;
+    onRemove: (id: number) => void;
+}
+
+const UserCard: React.FC<UserCardProps> = memo(({ u, onChange, onBlur, onRemove }) => {
+    // Determine visual style based on status
+    let borderColor = 'border-border';
+    let bgColor = 'bg-surface';
+    let statusIcon = null;
+
+    if (u.creationError) {
+        borderColor = 'border-danger';
+        bgColor = 'bg-danger-light/10';
+    } else if (u.isBeingEdited) {
+        // Visual state while typing: Yellow (To Verify style) but keeps focus
+        borderColor = 'border-warning';
+        bgColor = 'bg-warning/10';
+        statusIcon = <PencilAltIcon className="w-5 h-5 text-warning-dark animate-pulse" />;
+    } else {
+        switch (u.status) {
+            case 'duplicate':
+                borderColor = 'border-danger';
+                bgColor = 'bg-danger-light/10';
+                statusIcon = <BlockIcon className="w-5 h-5 text-danger" />;
+                break;
+            case 'to_verify':
+                borderColor = 'border-warning';
+                bgColor = 'bg-warning/10';
+                statusIcon = <span className="text-xl font-bold text-warning-dark">?</span>;
+                break;
+            case 'new':
+                borderColor = u.isValid ? 'border-success' : 'border-border';
+                bgColor = u.isValid ? 'bg-surface' : 'bg-surface';
+                statusIcon = u.isValid ? <UserCheckIcon className="w-5 h-5 text-success" /> : null;
+                break;
+        }
+    }
+
+    return (
+        <div className={`p-4 rounded-lg shadow-sm border-2 transition-all relative ${bgColor} ${borderColor}`}>
+            <button 
+                onClick={() => onRemove(u.id)} 
+                className="absolute top-2 right-2 text-text-tertiary hover:text-danger p-1"
+                tabIndex={-1}
+            >
+                <XIcon className="w-5 h-5" />
+            </button>
+
+            {/* Status Indicator */}
+            <div className="absolute top-2 left-2" title={u.isBeingEdited ? "Editando..." : (u.duplicateReason || u.status)}>
+                {statusIcon}
+            </div>
+
+            <div className="space-y-3 mt-4">
+                {u.creationError && (
+                    <div className="text-xs bg-danger text-white p-2 rounded">
+                        <strong>Error:</strong> {u.creationError}
+                    </div>
+                )}
+                
+                {!u.isBeingEdited && u.status === 'duplicate' && u.duplicateReason && (
+                    <div className="text-xs bg-danger-light text-danger-text p-2 rounded font-semibold border border-danger">
+                        {u.duplicateReason}
+                    </div>
+                )}
+
+                {(u.isBeingEdited || u.status === 'to_verify') && (
+                    <div className="text-xs bg-warning text-black p-1 rounded font-semibold text-center border border-warning">
+                        {u.isBeingEdited ? 'Editando...' : 'Editado - Requiere Verificación'}
+                    </div>
+                )}
+
+                <div>
+                    <label className="block text-[10px] font-bold text-text-secondary uppercase">Nombre Completo</label>
+                    <input 
+                        type="text" 
+                        value={u.userName} 
+                        onChange={(e) => onChange(u.id, 'userName', e.target.value)}
+                        onBlur={() => onBlur(u.id)}
+                        className={`w-full p-1 bg-transparent border-b focus:outline-none text-text-primary text-sm ${!u.userName.trim() ? 'border-danger' : 'border-border focus:border-accent'}`}
+                        placeholder="Requerido"
+                    />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-1">
+                        <label className="block text-[10px] font-bold text-text-secondary uppercase">Prefijo</label>
+                        <select 
+                            value={u.cedulaPrefix}
+                            onChange={(e) => onChange(u.id, 'cedulaPrefix', e.target.value)}
+                            onBlur={() => onBlur(u.id)}
+                            className="w-full p-1 bg-transparent border-b border-border focus:border-accent focus:outline-none text-text-primary text-sm"
+                        >
+                            {CEDULA_PREFIXES.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                    </div>
+                    <div className="col-span-2">
+                        <label className="block text-[10px] font-bold text-text-secondary uppercase">Nº Cédula</label>
+                        <input 
+                            type="text" 
+                            value={u.cedulaNumber} 
+                            onChange={(e) => onChange(u.id, 'cedulaNumber', e.target.value)}
+                            onBlur={() => onBlur(u.id)}
+                            className={`w-full p-1 bg-transparent border-b focus:outline-none text-text-primary text-sm ${!u.cedulaNumber.trim() ? 'border-danger' : 'border-border focus:border-accent'}`}
+                            placeholder="Número/Letras"
+                        />
+                    </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                    <div>
+                        <label className="block text-[10px] font-bold text-text-secondary uppercase">Teléfono</label>
+                        <input 
+                            type="text" 
+                            value={u.phoneNumber} 
+                            onChange={(e) => onChange(u.id, 'phoneNumber', e.target.value)}
+                            onBlur={() => onBlur(u.id)}
+                            className="w-full p-1 bg-transparent border-b border-border focus:border-accent focus:outline-none text-text-primary text-sm"
+                            placeholder="Opcional"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-bold text-text-secondary uppercase">Rol</label>
+                        <select 
+                            value={u.roleID} 
+                            onChange={(e) => onChange(u.id, 'roleID', Number(e.target.value))}
+                            onBlur={() => onBlur(u.id)}
+                            className="w-full p-1 bg-transparent border-b border-border focus:border-accent focus:outline-none text-text-primary text-sm"
+                        >
+                            {ROLES.map(r => (
+                                <option key={r.id} value={r.id}>{r.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label className="block text-[10px] font-bold text-text-secondary uppercase">Email</label>
+                    <input 
+                        type="email" 
+                        value={u.email} 
+                        onChange={(e) => onChange(u.id, 'email', e.target.value)}
+                        onBlur={() => onBlur(u.id)}
+                        className={`w-full p-1 bg-transparent border-b focus:outline-none text-text-primary text-sm ${!u.email.trim() ? 'border-danger' : 'border-border focus:border-accent'}`}
+                        placeholder="Requerido"
+                    />
+                </div>
+            </div>
+        </div>
+    );
+});
+
+// --- MAIN COMPONENT ---
 
 const BulkUserCreationPage: React.FC = () => {
     const { user: authUser, hasPermission } = useAuth();
@@ -41,21 +203,49 @@ const BulkUserCreationPage: React.FC = () => {
     const [creationStatus, setCreationStatus] = useState<{success: number, failed: number} | null>(null);
     const [isExcel, setIsExcel] = useState(false);
     const [isBackConfirmOpen, setIsBackConfirmOpen] = useState(false);
-
+    
+    // Existing DB Data for comparison
+    const [existingDbUsers, setExistingDbUsers] = useState<User[]>([]);
 
     // Configuration Options
     const [autoGenerateEmail, setAutoGenerateEmail] = useState(true);
     const [useCedulaAsPassword, setUseCedulaAsPassword] = useState(true);
     const [customEmailDomain, setCustomEmailDomain] = useState('schoolapp');
 
+    // Refs
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const toVerifySectionRef = useRef<HTMLDivElement>(null);
+    const prevToVerifyCountRef = useRef(0);
 
     const canAccess = useMemo(() => {
         return hasPermission([6, 7]);
     }, [hasPermission]);
 
+    // Categorized Users (Moved up for useEffect usage)
+    const duplicateUsers = extractedUsers.filter(u => u.status === 'duplicate');
+    const toVerifyUsers = extractedUsers.filter(u => u.status === 'to_verify');
+    const newUsers = extractedUsers.filter(u => u.status === 'new');
+    const hasInvalidNewUsers = newUsers.some(u => !u.isValid || u.creationError);
+
+    // Fetch existing users on mount to check for duplicates later
+    useEffect(() => {
+        if (authUser?.schoolId && canAccess) {
+            apiService.getUsers(authUser.schoolId)
+                .then(setExistingDbUsers)
+                .catch(console.error);
+        }
+    }, [authUser, canAccess]);
+
+    // Auto-scroll effect: When items move to "To Verify", scroll to that section
+    useEffect(() => {
+        if (toVerifyUsers.length > prevToVerifyCountRef.current) {
+            // Only scroll if the count INCREASED (meaning an item was moved here)
+            toVerifySectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        prevToVerifyCountRef.current = toVerifyUsers.length;
+    }, [toVerifyUsers.length]);
+
     if (!authUser) {
-        // Still loading auth context, show a loader
         return <div>Cargando...</div>;
     }
 
@@ -135,7 +325,6 @@ const BulkUserCreationPage: React.FC = () => {
     const generateEmailFromData = (name: string, cedulaNumber: string, domain: string): string => {
         if (!name || !cedulaNumber) return '';
         
-        // Normalize to remove accents (e.g., José -> Jose)
         const cleanName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/[^a-z\s]/g, '');
         const parts = cleanName.split(/\s+/);
         const firstName = parts[0] || 'usuario';
@@ -149,6 +338,24 @@ const BulkUserCreationPage: React.FC = () => {
     
     const checkValidity = (u: Partial<ExtractedUser>): boolean => {
         return !!((u.userName || '').trim() && (u.cedulaNumber || '').trim() && (u.email || '').trim());
+    };
+
+    const checkForDuplicates = (number: string, email: string): { isDuplicate: boolean, reason?: string } => {
+        // Check Cedula
+        const cedulaMatch = existingDbUsers.find(dbUser => {
+            if (!dbUser.cedula) return false;
+            // Normalize DB cedula to just numbers for comparison
+            const dbNums = dbUser.cedula.replace(/[^0-9]/g, '');
+            return dbNums === number && number.length > 4; // Ensure we don't match small false positives
+        });
+
+        if (cedulaMatch) return { isDuplicate: true, reason: `Cédula ya registrada (${cedulaMatch.userName})` };
+
+        // Check Email
+        const emailMatch = existingDbUsers.find(dbUser => dbUser.email.toLowerCase() === email.toLowerCase());
+        if (emailMatch) return { isDuplicate: true, reason: `Email ya registrado (${emailMatch.userName})` };
+
+        return { isDuplicate: false };
     };
 
     // Name formatting helpers
@@ -168,8 +375,19 @@ const BulkUserCreationPage: React.FC = () => {
             if (autoGenerateEmail && !u.isEmailManuallyEdited) {
                 newEmail = generateEmailFromData(newName, u.cedulaNumber, customEmailDomain);
             }
+            
+            // If the user was already a duplicate, moving them to verify happens on change now,
+            // but for bulk actions we might want to keep status or reset. 
+            // Let's assume bulk actions are intentional fixes.
+            const status = u.status === 'duplicate' ? 'to_verify' : u.status;
 
-            return { ...u, userName: newName, email: newEmail, isValid: checkValidity({ ...u, userName: newName, email: newEmail }) };
+            return { 
+                ...u, 
+                userName: newName, 
+                email: newEmail, 
+                isValid: checkValidity({ ...u, userName: newName, email: newEmail }),
+                status: status
+            };
         }));
     };
 
@@ -196,11 +414,18 @@ const BulkUserCreationPage: React.FC = () => {
             }
             
             if (needsUpdate) {
-                return { ...u, email: newEmail, isValid: checkValidity({ ...u, email: newEmail }) };
+                const status = u.status === 'duplicate' ? 'to_verify' : u.status;
+                return { 
+                    ...u, 
+                    email: newEmail, 
+                    isValid: checkValidity({ ...u, email: newEmail }),
+                    status: status
+                };
             }
             
             return u;
         }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [autoGenerateEmail, customEmailDomain, step]);
 
     const parseCedula = (rawCedula: string): { prefix: string, number: string } => {
@@ -311,6 +536,10 @@ const BulkUserCreationPage: React.FC = () => {
                     email = generateEmailFromData(u.userName, number, customEmailDomain);
                 }
 
+                // CHECK FOR DUPLICATES
+                const dupCheck = checkForDuplicates(number, email);
+                const status: UserStatus = dupCheck.isDuplicate ? 'duplicate' : 'new';
+
                 const userObj: ExtractedUser = {
                     id: Date.now() + index,
                     userName: u.userName || '',
@@ -320,7 +549,10 @@ const BulkUserCreationPage: React.FC = () => {
                     phoneNumber: u.phoneNumber || '',
                     roleID: roleID,
                     isValid: false,
-                    isEmailManuallyEdited: isEmailManuallyEdited
+                    isEmailManuallyEdited: isEmailManuallyEdited,
+                    duplicateReason: dupCheck.reason,
+                    status: status,
+                    isBeingEdited: false
                 };
                 
                 return { ...userObj, isValid: checkValidity(userObj) };
@@ -337,30 +569,59 @@ const BulkUserCreationPage: React.FC = () => {
         }
     };
 
-    const handleUserChange = (id: number, field: keyof Omit<ExtractedUser, 'id' | 'isValid' | 'creationError' | 'isEmailManuallyEdited'>, value: any) => {
+    const handleUserChange = (id: number, field: keyof ExtractedUser, value: any) => {
         setExtractedUsers(prev => prev.map(u => {
             if (u.id === id) {
+                // @ts-ignore - dynamic key
                 let updatedUser: ExtractedUser = { ...u, [field]: value };
     
-                // Clear creation error on any edit
                 if (updatedUser.creationError) {
                     delete updatedUser.creationError;
                 }
+                
+                // Mark as being edited so it gets visual "To Verify" style but stays in list
+                updatedUser.isBeingEdited = true;
     
-                // If user edits email manually, lock it from auto-generation
                 if (field === 'email') {
                     updatedUser.isEmailManuallyEdited = true;
-                } 
-                // If auto-generation is on and name/cedula changes, update email *only if not manually locked*
-                else if (autoGenerateEmail && (field === 'userName' || field === 'cedulaNumber')) {
+                } else if (autoGenerateEmail && (field === 'userName' || field === 'cedulaNumber')) {
                     if (!updatedUser.isEmailManuallyEdited) {
                         updatedUser.email = generateEmailFromData(updatedUser.userName, updatedUser.cedulaNumber, customEmailDomain);
                     }
                 }
                 
-                // Finally, update validity
                 updatedUser.isValid = checkValidity(updatedUser);
                 return updatedUser;
+            }
+            return u;
+        }));
+    };
+
+    const handleUserBlur = (id: number) => {
+        setExtractedUsers(prev => prev.map(u => {
+            if (u.id === id) {
+                // When finishing edit, remove edit flag AND move to "to_verify" list
+                // This ensures re-rendering happens only when user leaves the field
+                return { 
+                    ...u, 
+                    isBeingEdited: false, 
+                    status: 'to_verify', 
+                    duplicateReason: undefined // Clear duplications warning since user took action
+                };
+            }
+            return u;
+        }));
+    };
+
+    const verifyPendingUsers = () => {
+        setExtractedUsers(prev => prev.map(u => {
+            if (u.status === 'to_verify') {
+                const dupCheck = checkForDuplicates(u.cedulaNumber, u.email);
+                if (dupCheck.isDuplicate) {
+                    return { ...u, status: 'duplicate', duplicateReason: dupCheck.reason };
+                } else {
+                    return { ...u, status: 'new', duplicateReason: undefined };
+                }
             }
             return u;
         }));
@@ -381,6 +642,7 @@ const BulkUserCreationPage: React.FC = () => {
             roleID: 1,
             isValid: false,
             isEmailManuallyEdited: false,
+            status: 'new'
         };
         setExtractedUsers([...extractedUsers, newUser]);
     };
@@ -388,10 +650,11 @@ const BulkUserCreationPage: React.FC = () => {
     const handleBulkCreate = async () => {
         if (!authUser?.schoolId) return;
         
-        // Double check validation
-        const invalidCount = extractedUsers.filter(u => !checkValidity(u)).length;
-        if (invalidCount > 0) {
-            setError("No se pueden crear usuarios. Corrija o elimine las tarjetas con errores (marcadas en rojo).");
+        // Filter out duplicates and invalid
+        const validUsersToCreate = extractedUsers.filter(u => u.isValid && u.status === 'new');
+        
+        if (validUsersToCreate.length === 0) {
+            setError("No hay usuarios nuevos válidos para crear. Verifique los duplicados o pendientes.");
             return;
         }
 
@@ -401,11 +664,10 @@ const BulkUserCreationPage: React.FC = () => {
         let successCount = 0;
         let failedCount = 0;
 
-        const remainingUsers: ExtractedUser[] = [];
+        const remainingUsers: ExtractedUser[] = [...extractedUsers];
 
-        for (const u of extractedUsers) {
+        for (const u of validUsersToCreate) {
             try {
-                // Re-assemble cedula string
                 const finalCedula = `${u.cedulaPrefix}-${u.cedulaNumber}`;
                 const password = useCedulaAsPassword && u.cedulaNumber ? u.cedulaNumber : "123456";
 
@@ -419,15 +681,21 @@ const BulkUserCreationPage: React.FC = () => {
                     passwordHash: password 
                 });
                 successCount++;
+                
+                const idx = remainingUsers.findIndex(rem => rem.id === u.id);
+                if (idx !== -1) remainingUsers.splice(idx, 1);
+
             } catch (err: any) {
                 console.error(`Failed to create user ${u.userName}`, err);
                 failedCount++;
-                // Keep in list with error message
-                remainingUsers.push({
-                    ...u,
-                    creationError: err.message || "Error desconocido al crear usuario.",
-                    isValid: false // Mark invalid visually
-                });
+                const idx = remainingUsers.findIndex(rem => rem.id === u.id);
+                if (idx !== -1) {
+                    remainingUsers[idx] = {
+                        ...remainingUsers[idx],
+                        creationError: err.message || "Error desconocido.",
+                        isValid: false
+                    };
+                }
             }
         }
 
@@ -437,6 +705,8 @@ const BulkUserCreationPage: React.FC = () => {
         
         if (failedCount === 0 && remainingUsers.length === 0) {
             setTimeout(() => navigate('/users'), 1500);
+        } else if (successCount > 0) {
+            apiService.getUsers(authUser.schoolId).then(setExistingDbUsers);
         }
     };
 
@@ -445,11 +715,6 @@ const BulkUserCreationPage: React.FC = () => {
             <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
         </svg>
     );
-
-    const hasInvalidUsers = useMemo(() => {
-        return extractedUsers.some(u => !checkValidity(u) || u.creationError);
-    }, [extractedUsers]);
-
 
     return (
         <div className="p-6">
@@ -573,42 +838,15 @@ Maria Rodriguez, V-87654321, maria@example.com, Profesor"
             {step === 'review' && (
                 <div>
                     {/* Top Toolbar */}
-                    <div className="bg-surface p-4 rounded-lg shadow-sm border border-border mb-6">
-                        {/* Row 1: Global Configurations */}
-                        <div className="flex flex-wrap justify-between items-center gap-4 border-b border-border pb-4 mb-4">
-                            <div className="flex flex-wrap items-center gap-6">
-                                <label className="flex items-center cursor-pointer" title="Si falta el email, se generará uno automáticamente">
-                                    <input type="checkbox" checked={autoGenerateEmail} onChange={e => setAutoGenerateEmail(e.target.checked)} className="mr-2 h-4 w-4 text-primary focus:ring-accent"/>
-                                    <span className="text-sm font-medium text-text-primary">Autogenerar Email</span>
-                                </label>
-
-                                <div className="flex items-center gap-1">
-                                    <span className="text-sm font-medium text-text-primary">@</span>
-                                    <input 
-                                        type="text" 
-                                        value={customEmailDomain} 
-                                        onChange={e => setCustomEmailDomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                                        className="p-1 border border-border rounded text-sm w-32 disabled:bg-background disabled:text-text-tertiary"
-                                        aria-label="Dominio de email personalizado"
-                                        disabled={!autoGenerateEmail}
-                                    />
-                                    <span className="text-sm font-medium text-text-primary">.com</span>
-                                </div>
-
-                                <label className="flex items-center cursor-pointer" title="La contraseña será igual a la cédula del usuario (solo números)">
-                                    <input type="checkbox" checked={useCedulaAsPassword} onChange={e => setUseCedulaAsPassword(e.target.checked)} className="mr-2 h-4 w-4 text-primary focus:ring-accent"/>
-                                    <span className="text-sm font-medium text-text-primary">Usar Cédula como Contraseña</span>
-                                </label>
-                            </div>
-                            <div className="flex gap-2">
-                                <button onClick={addUser} type="button" className="bg-info text-white px-3 py-2 rounded hover:bg-info-dark cursor-pointer">+ Agregar Manual</button>
-                            </div>
+                    <div className="bg-surface p-4 rounded-lg shadow-sm border border-border mb-6 flex flex-wrap gap-4 items-center justify-between">
+                        <div className="flex gap-4 items-center">
+                            <label className="flex items-center text-sm"><input type="checkbox" checked={autoGenerateEmail} onChange={e => setAutoGenerateEmail(e.target.checked)} className="mr-2"/> Autogenerar Email</label>
+                            {autoGenerateEmail && <div className="flex items-center text-sm font-medium">@ <input type="text" value={customEmailDomain} onChange={e => setCustomEmailDomain(e.target.value)} className="mx-1 p-1 border rounded w-24"/> .com</div>}
+                            <label className="flex items-center text-sm"><input type="checkbox" checked={useCedulaAsPassword} onChange={e => setUseCedulaAsPassword(e.target.checked)} className="mr-2"/> Cédula como Password</label>
                         </div>
-
-                        {/* Row 2: Bulk Actions */}
                         <div className="flex flex-wrap items-center gap-4">
                             <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold text-text-secondary">Asignar Rol a Todos:</span>
+                                <span className="text-sm font-bold text-text-secondary">Asignar Rol:</span>
                                 <select 
                                     className="p-1 border border-border rounded bg-background text-text-primary text-sm"
                                     onChange={(e) => applyGlobalRole(e.target.value)}
@@ -619,13 +857,13 @@ Maria Rodriguez, V-87654321, maria@example.com, Profesor"
                                     ))}
                                 </select>
                             </div>
-                            
                             <div className="flex items-center gap-2 border-l border-border pl-4">
-                                <span className="text-sm font-bold text-text-secondary">Formato Nombres:</span>
+                                <span className="text-sm font-bold text-text-secondary">Nombres:</span>
                                 <button onClick={() => applyNameFormat('uppercase')} className="px-2 py-1 bg-background border border-border rounded text-xs hover:bg-border" title="MAYÚSCULAS">AA</button>
                                 <button onClick={() => applyNameFormat('lowercase')} className="px-2 py-1 bg-background border border-border rounded text-xs hover:bg-border" title="minúsculas">aa</button>
                                 <button onClick={() => applyNameFormat('capitalize')} className="px-2 py-1 bg-background border border-border rounded text-xs hover:bg-border" title="Nombre Propio">Aa</button>
                             </div>
+                            <button onClick={addUser} className="bg-info text-white px-3 py-2 rounded hover:bg-info-dark flex items-center text-sm ml-4"><PlusIcon className="w-4 h-4 mr-1"/> Manual</button>
                         </div>
                     </div>
 
@@ -637,106 +875,51 @@ Maria Rodriguez, V-87654321, maria@example.com, Profesor"
                     
                     {error && <div className="mb-4 bg-danger-light text-danger p-3 rounded text-center font-bold">{error}</div>}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                        {extractedUsers.map((u) => {
-                            const isGreen = checkValidity(u) && !u.creationError;
-                            
-                            return (
-                                <div 
-                                    key={u.id} 
-                                    className={`p-4 rounded-lg shadow-md border-2 transition-all relative ${
-                                        isGreen ? 'bg-surface border-success/50' : 'bg-danger-light/10 border-danger/50'
-                                    }`}
-                                >
-                                    <button 
-                                        onClick={() => removeUser(u.id)} 
-                                        className="absolute top-2 right-2 text-text-tertiary hover:text-danger p-1"
-                                    >
-                                        <XIcon className="w-5 h-5" />
-                                    </button>
+                    {/* SECCION 1: DUPLICADOS */}
+                    {duplicateUsers.length > 0 && (
+                        <div className="mb-8 border border-danger rounded-lg overflow-hidden">
+                            <div className="bg-danger text-white p-2 font-bold flex justify-between items-center">
+                                <span>1. Duplicados Detectados ({duplicateUsers.length})</span>
+                                <span className="text-xs font-normal opacity-90">Edite los campos para corregir y mover a "Por Verificar"</span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-danger-light/10">
+                                {duplicateUsers.map(u => (
+                                    <UserCard key={u.id} u={u} onChange={handleUserChange} onBlur={handleUserBlur} onRemove={removeUser} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
-                                    {/* Status Indicator */}
-                                    <div className="absolute top-2 left-2">
-                                        {isGreen && <UserCheckIcon className="w-5 h-5 text-success" />}
-                                    </div>
+                    {/* SECCION 2: POR VERIFICAR (Editados) */}
+                    {toVerifyUsers.length > 0 && (
+                        <div ref={toVerifySectionRef} className="mb-8 border border-warning rounded-lg overflow-hidden">
+                            <div className="bg-warning text-black p-2 font-bold flex justify-between items-center">
+                                <span>2. Por Verificar ({toVerifyUsers.length})</span>
+                                <button onClick={verifyPendingUsers} className="bg-white text-warning-dark px-3 py-1 rounded text-xs font-bold hover:bg-gray-100 flex items-center shadow-sm">
+                                    <UserCheckIcon className="w-4 h-4 mr-1"/> Verificar Correcciones
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-warning/10">
+                                {toVerifyUsers.map(u => (
+                                    <UserCard key={u.id} u={u} onChange={handleUserChange} onBlur={handleUserBlur} onRemove={removeUser} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
-                                    <div className="space-y-3 mt-4">
-                                        {u.creationError && (
-                                            <div className="text-xs bg-danger text-white p-2 rounded">
-                                                <strong>Error:</strong> {u.creationError}
-                                            </div>
-                                        )}
-
-                                        <div>
-                                            <label className="block text-xs font-bold text-text-secondary uppercase">Nombre Completo</label>
-                                            <input 
-                                                type="text" 
-                                                value={u.userName} 
-                                                onChange={(e) => handleUserChange(u.id, 'userName', e.target.value)}
-                                                className={`w-full p-1 bg-transparent border-b focus:outline-none text-text-primary ${!u.userName.trim() ? 'border-danger' : 'border-border focus:border-accent'}`}
-                                                placeholder="Requerido"
-                                            />
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            <div className="col-span-1">
-                                                <label className="block text-xs font-bold text-text-secondary uppercase">Prefijo</label>
-                                                <select 
-                                                    value={u.cedulaPrefix}
-                                                    onChange={(e) => handleUserChange(u.id, 'cedulaPrefix', e.target.value)}
-                                                    className="w-full p-1 bg-transparent border-b border-border focus:border-accent focus:outline-none text-text-primary"
-                                                >
-                                                    {CEDULA_PREFIXES.map(p => <option key={p} value={p}>{p}</option>)}
-                                                </select>
-                                            </div>
-                                            <div className="col-span-2">
-                                                <label className="block text-xs font-bold text-text-secondary uppercase">Nº Cédula</label>
-                                                <input 
-                                                    type="text" 
-                                                    value={u.cedulaNumber} 
-                                                    onChange={(e) => handleUserChange(u.id, 'cedulaNumber', e.target.value.replace(/[^0-9]/g, ''))}
-                                                    className={`w-full p-1 bg-transparent border-b focus:outline-none text-text-primary ${!u.cedulaNumber.trim() ? 'border-danger' : 'border-border focus:border-accent'}`}
-                                                    placeholder="Solo números"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <label className="block text-xs font-bold text-text-secondary uppercase">Teléfono</label>
-                                                <input 
-                                                    type="text" 
-                                                    value={u.phoneNumber} 
-                                                    onChange={(e) => handleUserChange(u.id, 'phoneNumber', e.target.value)}
-                                                    className="w-full p-1 bg-transparent border-b border-border focus:border-accent focus:outline-none text-text-primary"
-                                                    placeholder="Opcional"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-text-secondary uppercase">Rol</label>
-                                                <select 
-                                                    value={u.roleID} 
-                                                    onChange={(e) => handleUserChange(u.id, 'roleID', Number(e.target.value))}
-                                                    className="w-full p-1 bg-transparent border-b border-border focus:border-accent focus:outline-none text-text-primary"
-                                                >
-                                                    {ROLES.map(r => (
-                                                        <option key={r.id} value={r.id}>{r.name}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-text-secondary uppercase">Email</label>
-                                            <input 
-                                                type="email" 
-                                                value={u.email} 
-                                                onChange={(e) => handleUserChange(u.id, 'email', e.target.value)}
-                                                className={`w-full p-1 bg-transparent border-b focus:outline-none text-text-primary ${!u.email.trim() ? 'border-danger' : 'border-border focus:border-accent'}`}
-                                                placeholder="Requerido"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                    {/* SECCION 3: NUEVOS (Listos) */}
+                    <div className="mb-24">
+                        <h3 className="text-lg font-bold text-success-text mb-2 border-b border-success pb-1">3. Nuevos Usuarios a Cargar ({newUsers.length})</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {newUsers.map((u) => (
+                                <UserCard key={u.id} u={u} onChange={handleUserChange} onBlur={handleUserBlur} onRemove={removeUser} />
+                            ))}
+                        </div>
+                        {newUsers.length === 0 && (
+                            <div className="text-center py-8 text-secondary border border-dashed rounded">
+                                No hay usuarios nuevos para cargar.
+                            </div>
+                        )}
                     </div>
                     
                     {extractedUsers.length === 0 && (
@@ -745,22 +928,22 @@ Maria Rodriguez, V-87654321, maria@example.com, Profesor"
 
                     <div className="fixed bottom-0 left-0 right-0 bg-surface p-4 shadow-lg border-t border-border flex justify-end items-center gap-4 z-40 md:pl-64">
                         <div className="text-sm text-text-secondary hidden sm:block">
-                            {extractedUsers.length} usuarios en lista. 
-                            {hasInvalidUsers ? <span className="text-danger font-bold ml-1">Hay errores pendientes.</span> : <span className="text-success font-bold ml-1">Todo listo.</span>}
+                            {newUsers.length} listos. {toVerifyUsers.length} pendientes. {duplicateUsers.length} duplicados.
                         </div>
                          <button onClick={() => setIsBackConfirmOpen(true)} className="bg-background text-text-primary py-3 px-6 rounded-lg hover:bg-border border border-border">
                             Atrás
                         </button>
+                        
                         <button 
                             onClick={handleBulkCreate} 
-                            disabled={isCreating || hasInvalidUsers || extractedUsers.length === 0}
+                            disabled={isCreating || hasInvalidNewUsers || newUsers.length === 0}
                             className="bg-success text-text-on-primary py-3 px-8 rounded-lg font-bold text-lg hover:bg-opacity-90 disabled:bg-secondary disabled:cursor-not-allowed shadow-md transform transition hover:-translate-y-1 flex items-center"
-                            title={hasInvalidUsers ? "Corrija los errores antes de guardar" : "Guardar usuarios"}
+                            title={hasInvalidNewUsers ? "Corrija los errores antes de guardar" : "Guardar usuarios"}
                         >
                             {isCreating ? (
                                 <><SpinnerIcon className="mr-2"/> Procesando...</>
                             ) : (
-                                `Crear ${extractedUsers.length} Usuarios`
+                                `Crear ${newUsers.length} Usuarios`
                             )}
                         </button>
                     </div>

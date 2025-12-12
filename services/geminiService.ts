@@ -5,29 +5,42 @@ class GeminiService {
     private localClient: GoogleGenAI | null = null;
 
     constructor() {
-        // En desarrollo (Local), usamos la clave de .env si existe.
-        // Vite expone variables con prefijo VITE_
-        const localKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
-        if (localKey) {
-            console.log("GeminiService: Usando cliente local con API Key.");
-            this.localClient = new GoogleGenAI({ apiKey: localKey });
+        // HÍBRIDO: Detección de entorno.
+        // 1. Google AI Studio: Inyecta process.env.API_KEY automáticamente.
+        // 2. Local Vite (opcional): Puede usar import.meta.env.VITE_GEMINI_API_KEY.
+        // 3. Producción (Vercel): No tiene estas variables en el frontend por seguridad.
+        
+        const apiKey = process.env.API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+
+        if (apiKey) {
+            console.log("GeminiService: API Key detectada en entorno local. Usando cliente directo.");
+            this.localClient = new GoogleGenAI({ apiKey: apiKey });
         } else {
-            console.log("GeminiService: Modo producción (o sin llave local). Usando Proxy /api/gemini.");
+            console.log("GeminiService: No se detectó API Key local. Usando Proxy Serverless (/api/gemini).");
         }
     }
 
     async generateContent(params: any): Promise<{ text: string | undefined }> {
         if (this.localClient) {
-            // Modo Local: Llamada directa al SDK para mayor velocidad en desarrollo
+            // --- MODO LOCAL (Google AI Studio / Dev) ---
+            // Llamada directa al SDK sin pasar por el backend
             try {
-                const response = await this.localClient.models.generateContent(params);
+                // Desestructuramos params para asegurar que coincidan con la firma del SDK
+                const { model, contents, config } = params;
+
+                const response = await this.localClient.models.generateContent({
+                    model: model || "gemini-2.5-flash",
+                    contents,
+                    config
+                });
                 return { text: response.text };
             } catch (error) {
                 console.error("Gemini Local Error:", error);
                 throw error;
             }
         } else {
-            // Modo Producción: Llamada a través de la Serverless Function para proteger la Key
+            // --- MODO PRODUCCIÓN (Vercel) ---
+            // Llamada a través de la Serverless Function para proteger la Key
             try {
                 const response = await fetch('/api/gemini', {
                     method: 'POST',

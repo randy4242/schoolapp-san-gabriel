@@ -1,4 +1,5 @@
-import { AuthenticatedUser, DashboardStats, User, Course, Teacher, Classroom, Student, ClassroomAttendanceStats, Lapso, StudentGradesVM, StudentAttendanceStats, LapsoGradeApiItem, StudentGradeItem, StudentGradesGroup, AuthResponse, Evaluation, Grade, Child, LoginHistoryRecord, Payment, Notification, ReportEmgClassroomResponse, ExtracurricularActivity, Certificate, CertificateGeneratePayload, Product, ProductWithAudiences, ProductAudience, AudiencePayload, Enrollment, ReportRrdeaClassroomResponse, Parent, UserDetails, AttendanceRecord, AttendanceEditPayload, ExtracurricularEnrollmentPayload, EnrolledStudent, ClassroomAverage, ClassroomStudentAveragesResponse, MedicalInfo, ApprovePaymentResponse, InvoicePrintVM, PendingInvoice, PaginatedInvoices, GenerateInvoicesRunDto, MonthlyGenerationResult, MonthlyARSummary, PaginatedPurchases, PurchaseCreatePayload, PurchaseDetail, PurchaseCreationResponse, PayrollRunPayload, PayrollPreviewResponse, PayrollRunResponse, PaginatedPayrolls, PayrollDetail, BaseSalaryUpdatePayload, Chat, Message, CreateGroupChatDto, SendMessageDto, PnlReportResponse, SalesByProductResponse, InventorySnapshotResponse, InventoryKardexResponse, ArAgingSummaryResponse, ArAgingByCustomerResponse, TrialBalanceRow, LedgerRow, IncomeStatement, BalanceSheet, WithholdingType, GenerateWithholdingPayload, GenerateWithholdingResponse, WithholdingListItem, WithholdingDetail } from '../types';
+
+import { AuthenticatedUser, DashboardStats, User, Course, Teacher, Classroom, Student, ClassroomAttendanceStats, Lapso, StudentGradesVM, StudentAttendanceStats, LapsoGradeApiItem, StudentGradeItem, StudentGradesGroup, AuthResponse, Evaluation, Grade, Child, LoginHistoryRecord, Payment, Notification, ReportEmgClassroomResponse, ExtracurricularActivity, Certificate, CertificateGeneratePayload, Product, ProductWithAudiences, ProductAudience, AudiencePayload, Enrollment, ReportRrdeaClassroomResponse, Parent, UserDetails, AttendanceRecord, AttendanceEditPayload, ExtracurricularEnrollmentPayload, EnrolledStudent, ClassroomAverage, ClassroomStudentAveragesResponse, MedicalInfo, ApprovePaymentResponse, InvoicePrintVM, PendingInvoice, PaginatedInvoices, GenerateInvoicesRunDto, MonthlyGenerationResult, MonthlyARSummary, PaginatedPurchases, PurchaseCreatePayload, PurchaseDetail, PurchaseCreationResponse, PayrollRunPayload, PayrollPreviewResponse, PayrollRunResponse, PaginatedPayrolls, PayrollDetail, BaseSalaryUpdatePayload, Chat, Message, CreateGroupChatDto, SendMessageDto, PnlReportResponse, SalesByProductResponse, InventorySnapshotResponse, InventoryKardexResponse, ArAgingSummaryResponse, ArAgingByCustomerResponse, TrialBalanceRow, LedgerRow, IncomeStatement, BalanceSheet, WithholdingType, GenerateWithholdingPayload, GenerateWithholdingResponse, WithholdingListItem, WithholdingDetail, Question, QuestionOption, TakeExamEvaluation, EvaluationQnA, StudentSubmission, ExamSubmissionDetail, EvaluationContent, CreateContentDTO, AnswerPayload } from '../types';
 
 const BASE_URL = "https://siscamoruco.somee.com/";
 const WITHHOLDING_BASE_URL = "https://siscamoruco.somee.com/api/withholdings";
@@ -344,12 +345,12 @@ class ApiService {
       groupsMap.get(courseName)!.push({
         evaluacion: item.evaluation?.title || 'Evaluación sin nombre',
         displayGrade: displayGrade,
+        gradeValue: item.gradeValue,
         date: item.evaluation?.date || null,
         comments: item.comments || '—'
       });
     });
 
-    // FIX: Corrected typo from StudentGrdesGroup to StudentGradesGroup.
     const groups: StudentGradesGroup[] = Array.from(groupsMap.entries()).map(([courseName, items]) => ({
       courseName,
       items: items.sort((a, b) => {
@@ -1020,8 +1021,6 @@ class ApiService {
 
     // Withholdings
     async getWithholdingTypes(): Promise<WithholdingType[]> {
-        // The prompt doesn't specify an endpoint for this, so we provide common static types.
-        // If an endpoint like GET /types existed, it would be: return this.requestWithholding<WithholdingType[]>('/types');
         return Promise.resolve([
             { withholdingTypeID: 1, name: 'IVA', description: 'Impuesto al Valor Agregado' },
             { withholdingTypeID: 2, name: 'ISLR', description: 'Impuesto Sobre La Renta' }
@@ -1053,6 +1052,135 @@ class ApiService {
     async annulWithholding(id: number): Promise<void> {
         return this.requestWithholding<void>(`/${id}/annul`, {
             method: 'PUT'
+        });
+    }
+
+    // --- VIRTUAL CLASSROOM & CONTENT METHODS ---
+
+    async getVirtualExam(evaluationId: number, schoolId: number): Promise<TakeExamEvaluation> {
+        return this.request<TakeExamEvaluation>(`api/evaluations/${evaluationId}/virtual-exam?schoolId=${schoolId}`);
+    }
+
+    async submitVirtualExam(evaluationId: number, schoolId: number, payload: { answers: AnswerPayload[] }): Promise<void> {
+        return this.request<void>(`api/evaluations/${evaluationId}/submit?schoolId=${schoolId}`, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+    }
+
+    async getVirtualExamSubmissions(evaluationId: number, schoolId: number): Promise<any[]> {
+        return this.request<any[]>(`api/evaluations/${evaluationId}/submissions?schoolId=${schoolId}`);
+    }
+
+    async getExamSubmissionDetail(evaluationId: number, userId: number, schoolId: number): Promise<ExamSubmissionDetail> {
+        return this.request<ExamSubmissionDetail>(`api/evaluations/${evaluationId}/submissions/${userId}/detail?schoolId=${schoolId}`);
+    }
+
+    // Questions Management
+    async getEvaluationQuestions(evaluationId: number): Promise<Question[]> {
+        return this.request<Question[]>(`api/evaluations/${evaluationId}/questions`);
+    }
+
+    async createEvaluationQuestion(evaluationId: number, question: Partial<Question>): Promise<Question> {
+        return this.request<Question>(`api/evaluations/${evaluationId}/questions`, {
+            method: 'POST',
+            body: JSON.stringify(question)
+        });
+    }
+
+    async updateEvaluationQuestion(evaluationId: number, questionId: number, question: Partial<Question>): Promise<void> {
+        return this.request<void>(`api/evaluations/${evaluationId}/questions/${questionId}`, {
+            method: 'PUT',
+            body: JSON.stringify(question)
+        });
+    }
+
+    async deleteEvaluationQuestion(evaluationId: number, questionId: number): Promise<void> {
+        return this.request<void>(`api/evaluations/${evaluationId}/questions/${questionId}`, {
+            method: 'DELETE'
+        });
+    }
+
+    // Options Management
+    async createQuestionOption(evaluationId: number, questionId: number, option: Partial<QuestionOption>): Promise<void> {
+        return this.request<void>(`api/evaluations/${evaluationId}/questions/${questionId}/options`, {
+            method: 'POST',
+            body: JSON.stringify(option)
+        });
+    }
+
+    async updateQuestionOption(evaluationId: number, questionId: number, optionId: number, option: Partial<QuestionOption>): Promise<void> {
+        return this.request<void>(`api/evaluations/${evaluationId}/questions/${questionId}/options/${optionId}`, {
+            method: 'PUT',
+            body: JSON.stringify(option)
+        });
+    }
+
+    async deleteQuestionOption(evaluationId: number, questionId: number, optionId: number): Promise<void> {
+        return this.request<void>(`api/evaluations/${evaluationId}/questions/${questionId}/options/${optionId}`, {
+            method: 'DELETE'
+        });
+    }
+
+    // QnA / Forums
+    async getEvaluationQnA(evaluationId: number): Promise<EvaluationQnA[]> {
+        return this.request<EvaluationQnA[]>(`api/evaluations/${evaluationId}/qna`);
+    }
+
+    async createEvaluationQnA(evaluationId: number, questionText: string): Promise<void> {
+        return this.request<void>(`api/evaluations/${evaluationId}/qna`, {
+            method: 'POST',
+            body: JSON.stringify({ questionText })
+        });
+    }
+
+    async answerEvaluationQuestion(evaluationId: number, qnaId: number, answerText: string): Promise<void> {
+        return this.request<void>(`api/evaluations/${evaluationId}/qna/${qnaId}/answer`, {
+            method: 'PUT',
+            body: JSON.stringify({ answerText })
+        });
+    }
+
+    // Evaluation Content (Integrated from evaluationContentService)
+    async getContents(evaluationId: number): Promise<EvaluationContent[]> {
+        return this.request<EvaluationContent[]>(`api/evaluations/${evaluationId}/contents`);
+    }
+
+    async createContent(evaluationId: number, data: CreateContentDTO): Promise<EvaluationContent> {
+        return this.request<EvaluationContent>(`api/evaluations/${evaluationId}/contents`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async uploadFile(evaluationId: number, contentId: number, file: File, onProgress?: (pct: number) => void): Promise<void> {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            const token = this.token;
+
+            xhr.open('POST', `${BASE_URL}api/evaluations/${evaluationId}/contents/${contentId}/upload-file`);
+            if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable && onProgress) {
+                    const percentComplete = (event.loaded / event.total) * 100;
+                    onProgress(percentComplete);
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve();
+                } else {
+                    reject(new Error(xhr.responseText || 'Upload failed'));
+                }
+            };
+
+            xhr.onerror = () => reject(new Error('Network error during upload'));
+            xhr.send(formData);
         });
     }
 }

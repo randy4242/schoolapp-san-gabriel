@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { apiService } from '../../services/apiService';
@@ -86,7 +87,11 @@ const LoginHistoryPage: React.FC = () => {
     }
 
     const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleString('es-ES', {
+        const date = new Date(dateString);
+        // Add 2 hours correction
+        date.setHours(date.getHours() + 2);
+        
+        return date.toLocaleString('es-ES', {
             day: '2-digit', month: '2-digit', year: 'numeric',
             hour: '2-digit', minute: '2-digit', second: '2-digit'
         });

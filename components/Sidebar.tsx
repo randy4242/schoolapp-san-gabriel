@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { ChevronDownIcon, LogoutIcon, HomeIcon, UsersIcon, BookOpenIcon, SchoolIcon, ClipboardListIcon, LinkIcon, BeakerIcon, CalendarIcon, DocumentTextIcon, CreditCardIcon, CubeIcon, BellIcon, UserCheckIcon, ChartBarIcon, DocumentReportIcon, HistoryIcon, UserCircleIcon, ClipboardCheckIcon, CashIcon, ShoppingCartIcon, BriefcaseIcon, TrendingUpIcon, LedgerIcon, PercentageIcon, PlusIcon } from './icons';
+import { ChevronDownIcon, LogoutIcon, HomeIcon, UsersIcon, BookOpenIcon, SchoolIcon, ClipboardListIcon, LinkIcon, BeakerIcon, CalendarIcon, DocumentTextIcon, CreditCardIcon, CubeIcon, BellIcon, UserCheckIcon, ChartBarIcon, DocumentReportIcon, HistoryIcon, UserCircleIcon, ClipboardCheckIcon, CashIcon, ShoppingCartIcon, BriefcaseIcon, TrendingUpIcon, LedgerIcon, PercentageIcon, PlusIcon, ChatAltIcon, CloudUploadIcon } from './icons';
 
 interface NavLink {
   to: string;
@@ -45,6 +45,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   const lapsoLabel = user && [6, 7, 8, 9].includes(user.schoolId) ? 'Momentos' : 'Lapsos';
 
   const navSections: NavSection[] = [
+    {
+      label: 'Aula Virtual',
+      icon: <BeakerIcon />,
+      // Only available for School ID 5
+      permission: (has) => user?.schoolId === 5 && has([1, 2, 3, 6, 7, 8, 9, 10, 11]), 
+      links: [
+        { to: '/virtual/my-courses', label: 'Mis Cursos', icon: <span />, permission: (has) => has([1, 2, 3, 6, 7, 8, 9, 10, 11]) },
+        { to: '/virtual/evaluations', label: 'Mis Evaluaciones', icon: <span />, permission: (has) => has([1, 3, 11]) }, // Student/Parent view
+        { to: '/virtual/grades', label: 'Boletín/Notas', icon: <span />, permission: (has) => has([1, 3, 11]) }, // Student/Parent view
+        { to: '/virtual/forums', label: 'Foros de Dudas', icon: <span />, permission: (has) => has([1, 2, 6, 7, 8, 9, 10]) },
+        { to: '/evaluations/submissions', label: 'Entregas Recibidas', icon: <span />, permission: (has) => has([2, 6, 7, 8, 9, 10]) }, // Teachers
+      ].filter(l => l.permission(Is))
+    },
     {
       label: 'Usuarios',
       icon: <UsersIcon />,

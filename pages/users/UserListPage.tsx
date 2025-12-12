@@ -129,11 +129,11 @@ const UserListPage: React.FC = () => {
       setSelectedPrintRoles([]);
   };
 
-  // Helper to enrich data with Classroom and Parents
+  // Helper to enrich data with Classroom and Parents using Batch Processing
   const enrichUsersWithDetails = async (baseUsers: User[]) => {
       if (!includeStudentDetails || !user?.schoolId) return baseUsers;
 
-      // 1. Fetch Classrooms Map
+      // 1. Fetch Classrooms Map (One request for all)
       let classroomMap = new Map<number, string>();
       try {
           const classrooms = await apiService.getClassrooms(user.schoolId);
@@ -142,29 +142,56 @@ const UserListPage: React.FC = () => {
           console.error("Error fetching classrooms for report", e);
       }
 
-      // 2. Process Users (Parallel fetching for parents)
-      const enriched = await Promise.all(baseUsers.map(async (u) => {
-          // Only process details for students (Role 1)
-          if (u.roleID !== 1) return u;
+      // 2. Process Users in Batches to avoid Network Saturation
+      // Browsers limit concurrent connections (usually 6). Batching ensures reliable data fetching.
+      const enrichedResults: any[] = [];
+      const BATCH_SIZE = 10; 
 
-          let parentNames = '';
-          try {
-              const parents = await apiService.getParentsOfChild(u.userID, user.schoolId);
-              parentNames = parents.map(p => p.userName).join(', ');
-          } catch (e) {
-              console.warn(`Error fetching parents for ${u.userName}`, e);
-          }
+      for (let i = 0; i < baseUsers.length; i += BATCH_SIZE) {
+          const batch = baseUsers.slice(i, i + BATCH_SIZE);
+          
+          const batchPromises = batch.map(async (u) => {
+              // Only process details for students (Role 1)
+              if (u.roleID !== 1) return u;
 
-          const classroomName = u.classroomID ? classroomMap.get(u.classroomID) : '';
+              let parentNames = '';
+              let parentEmails = '';
+              try {
+                  const parents = await apiService.getParentsOfChild(u.userID, user.schoolId);
+                  
+                  // FIX: El endpoint de relaciones no devuelve el email. 
+                  // Buscamos el usuario completo en la lista local 'users' usando el ID.
+                  const parentsWithDetails = parents.map(p => {
+                      const fullUser = users.find(existingUser => existingUser.userID === p.userID);
+                      return {
+                          userName: p.userName,
+                          email: fullUser ? fullUser.email : (p.email || 'N/A')
+                      };
+                  });
 
-          return {
-              ...u,
-              classroomName,
-              parentNames
-          };
-      }));
+                  parentNames = parentsWithDetails.map(p => p.userName).join(', ');
+                  parentEmails = parentsWithDetails.map(p => p.email).join(', ');
+              } catch (e) {
+                  // Silent fail for individual parent fetch to keep report generation going
+                  console.warn(`Error fetching parents for ${u.userName}`, e);
+              }
 
-      return enriched;
+              const classroomName = u.classroomID ? classroomMap.get(u.classroomID) : '';
+
+              return {
+                  ...u,
+                  classroomName,
+                  parentNames,
+                  parentEmails
+              };
+          });
+
+          // Wait for the current batch to finish before starting the next
+          const batchResult = await Promise.all(batchPromises);
+          enrichedResults.push(...batchResult);
+      }
+
+      return enrichedResults;
   };
 
   const getFilteredUsersForReport = () => {
@@ -230,7 +257,8 @@ const UserListPage: React.FC = () => {
                   return {
                       ...baseData,
                       "Salón": u.classroomName || 'N/A',
-                      "Padres/Representantes": u.parentNames || 'N/A'
+                      "Representante": u.parentNames || 'N/A',
+                      "Correo Representante": u.parentEmails || 'N/A'
                   };
               }
               return baseData;
@@ -248,7 +276,8 @@ const UserListPage: React.FC = () => {
               { wch: 15 }, // Rol
               { wch: 10 }, // Estado
               { wch: 20 }, // Salon
-              { wch: 40 }, // Padres
+              { wch: 30 }, // Padres
+              { wch: 35 }, // Email Padres
           ];
           worksheet['!cols'] = wscols;
 
@@ -430,7 +459,7 @@ const UserListPage: React.FC = () => {
                           />
                           <div>
                               <span className="block text-sm font-semibold text-text-primary">Incluir Detalles de Estudiantes</span>
-                              <span className="block text-xs text-text-secondary">Si se selecciona, se buscarán y mostrarán los <strong>Salones</strong> y <strong>Padres</strong> para los usuarios con rol de Estudiante. (Puede demorar más).</span>
+                              <span className="block text-xs text-text-secondary">Si se selecciona, se buscarán y mostrarán los <strong>Salones</strong>, <strong>Padres</strong> y <strong>Correos de Representantes</strong> para los usuarios con rol de Estudiante. (Puede demorar más).</span>
                           </div>
                       </label>
                   </div>

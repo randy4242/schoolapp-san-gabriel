@@ -21,9 +21,15 @@ type FormInputs = {
     schoolPerformanceFeatures: string;
     turno: 'Mañana' | 'Tarde';
     diasHabiles?: any;
+    manualAsistencias?: string;
+    manualInasistencias?: string;
     actitudesHabitos?: string;
     recomendacionesDocente?: string;
     lapsoId: number;
+    // New fields for additional teacher
+    manualTeacherName?: string;
+    manualTeacherCedulaPrefix?: string;
+    manualTeacherCedulaNumber?: string;
     [key: string]: any;
 };
 
@@ -47,36 +53,19 @@ const determineBoletaLevel = (classroomName: string | undefined | null): string 
     }
 
     // 2. Legacy / Natural Language Fallback
-    // Normalize string: lowercase, remove accents (NFD decomposition)
     const normalized = classroomName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
     // Preschool Logic (Arabic & Roman Numerals)
-    // Matches: "sala 1", "nivel 1", "1er nivel", "1er nivel", "1 nivel", "sala i", "nivel i"
     if (/(sala\s*1|nivel\s*1|primer\s*nivel|1er\s*nivel|1\s*nivel|sala\s*i\b|nivel\s*i\b)/.test(normalized)) return "Sala 1";
-    
-    // Matches: "sala 2", "nivel 2", "segundo nivel", "2do nivel", "2 nivel", "sala ii", "nivel ii"
     if (/(sala\s*2|nivel\s*2|segundo\s*nivel|2do\s*nivel|2\s*nivel|sala\s*ii\b|nivel\s*ii\b)/.test(normalized)) return "Sala 2";
-    
-    // Matches: "sala 3", "nivel 3", "tercer nivel", "3er nivel", "3 nivel", "sala iii", "nivel iii"
     if (/(sala\s*3|nivel\s*3|tercer\s*nivel|3er\s*nivel|3\s*nivel|sala\s*iii\b|nivel\s*iii\b)/.test(normalized)) return "Sala 3";
 
     // Primary Logic
-    // Matches: "primer grado", "1er grado", "1 grado", "grado 1"
     if (/(primer\s*grado|1er\s*grado|1\s*grado|grado\s*1)/.test(normalized)) return "Primer Grado";
-    
-    // Matches: "segundo grado", "2do grado", "2 grado", "grado 2"
     if (/(segundo\s*grado|2do\s*grado|2\s*grado|grado\s*2)/.test(normalized)) return "Segundo Grado";
-    
-    // Matches: "tercer grado", "3er grado", "3 grado", "grado 3"
     if (/(tercer\s*grado|3er\s*grado|3\s*grado|grado\s*3)/.test(normalized)) return "Tercer Grado";
-    
-    // Matches: "cuarto grado", "4to grado", "4 grado", "grado 4"
     if (/(cuarto\s*grado|4to\s*grado|4\s*grado|grado\s*4)/.test(normalized)) return "Cuarto Grado";
-    
-    // Matches: "quinto grado", "5to grado", "5 grado", "grado 5"
     if (/(quinto\s*grado|5to\s*grado|5\s*grado|grado\s*5)/.test(normalized)) return "Quinto Grado";
-    
-    // Matches: "sexto grado", "6to grado", "6 grado", "grado 6"
     if (/(sexto\s*grado|6to\s*grado|6\s*grado|grado\s*6)/.test(normalized)) return "Sexto Grado";
     
     return null;
@@ -97,13 +86,16 @@ const BoletaFormPage: React.FC = () => {
     const { user, hasPermission } = useAuth();
     const navigate = useNavigate();
     
-    const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormInputs>({
+    const { register, handleSubmit, watch, setValue, getValues, reset, formState: { errors } } = useForm<FormInputs>({
         defaultValues: {
             signatoryName: user?.userName || "",
             signatoryTitle: "",
             level: "",
             schoolPerformanceFeatures: "",
             turno: "Mañana",
+            manualAsistencias: "",
+            manualInasistencias: "",
+            manualTeacherCedulaPrefix: "V"
         }
     });
 
@@ -147,7 +139,6 @@ const BoletaFormPage: React.FC = () => {
         }
     }, [user]);
     
-    // Calculo de Días Hábiles basado en Inicio y Fin del Lapso
     useEffect(() => {
         if (lapsos.length > 0 && selectedLapsoId) {
             const selectedLapso = lapsos.find(l => l.lapsoID === Number(selectedLapsoId));
@@ -180,18 +171,15 @@ const BoletaFormPage: React.FC = () => {
                 };
 
                 const totalWorkingDays = calculateTotalBusinessDays(startDate, endDate);
-                setValue('diasHabiles', totalWorkingDays);
-            } else {
-                setValue('diasHabiles', '');
-                setDateRangeInfo('');
-            }
-        } else {
-            setValue('diasHabiles', '');
-            setDateRangeInfo('');
+                
+                const currentVal = getValues('diasHabiles');
+                if (!currentVal || currentVal == 0) {
+                    setValue('diasHabiles', totalWorkingDays);
+                }
+            } 
         }
-    }, [lapsos, setValue, selectedLapsoId]);
+    }, [lapsos, selectedLapsoId, getValues, setValue]);
 
-    // Effect to fetch student classroom details and attendance, and auto-select level
     useEffect(() => {
         const fetchStudentData = async () => {
             if (selectedUserId && user?.schoolId) {
@@ -203,7 +191,6 @@ const BoletaFormPage: React.FC = () => {
                     setValue('level', ''); 
                 }
 
-                // 1. Fetch Attendance Stats (Independent)
                 try {
                     const stats = await apiService.getStudentAttendanceStats(selectedUserId, '', user.schoolId, selectedLapsoId ? Number(selectedLapsoId) : undefined);
                     setAttendanceStats(stats.overall);
@@ -211,17 +198,13 @@ const BoletaFormPage: React.FC = () => {
                     console.warn("Could not load attendance stats", e);
                 }
 
-                // 2. Fetch Classroom / Level Info (Robust Cascade)
                 try {
                     let classroomName = '';
-                    
-                    // Attempt A: Get from User Details endpoint
                     try {
                         const details = await apiService.getUserDetails(selectedUserId, user.schoolId);
                         if (details?.classroom?.name) {
                             classroomName = details.classroom.name;
                         } else if (details?.classroomID) {
-                            // Attempt B: If we have ID but no object in details, fetch directly
                             const cls = await apiService.getClassroomById(details.classroomID, user.schoolId);
                             classroomName = cls.name;
                         }
@@ -229,7 +212,6 @@ const BoletaFormPage: React.FC = () => {
                         console.warn("User details fetch failed, trying fallback from student list...");
                     }
 
-                    // Attempt C: Check the local students list (already loaded) if Name is still empty
                     if (!classroomName && students.length > 0) {
                         const currentStudent = students.find(s => s.userID === Number(selectedUserId));
                         if (currentStudent?.classroomID) {
@@ -281,7 +263,6 @@ const BoletaFormPage: React.FC = () => {
         fetchStudentData();
     }, [selectedUserId, user?.schoolId, setValue, isEditMode, selectedLapsoId, students]);
 
-    // Effect for pre-filling form in edit mode
     useEffect(() => {
         if (isEditMode && id && user?.schoolId && students.length > 0 && lapsos.length > 0) {
             setLoading(true);
@@ -298,29 +279,56 @@ const BoletaFormPage: React.FC = () => {
                     
                     setOriginalCreatorId(typedContent.createdBy || boletaData.userId); 
 
-                    setValue('userId', boletaData.userId);
-                    setValue('level', typedContent.level || '');
-                    setValue('lapsoId', typedContent.lapso?.lapsoID || (lapsos.length > 0 ? lapsos[0].lapsoID : ''));
-                    setValue('signatoryName', boletaData.signatoryName || user?.userName || '');
-                    setValue('signatoryTitle', boletaData.signatoryTitle || '');
-                    setValue('schoolPerformanceFeatures', typedContent.data?.schoolPerformanceFeatures || '');
-                    setValue('turno', typedContent.turno || 'Mañana');
+                    // Construct the full form data object for reset()
+                    const formData: any = {
+                        userId: boletaData.userId,
+                        level: typedContent.level || '',
+                        lapsoId: typedContent.lapso?.lapsoID || (lapsos.length > 0 ? lapsos[0].lapsoID : ''),
+                        signatoryName: boletaData.signatoryName || user?.userName || '',
+                        signatoryTitle: boletaData.signatoryTitle || '',
+                        schoolPerformanceFeatures: typedContent.data?.schoolPerformanceFeatures || '',
+                        turno: typedContent.turno || 'Mañana',
+                        diasHabiles: typedContent.data?.diasHabiles || '',
+                        manualAsistencias: typedContent.data?.manualAsistencias || '',
+                        manualInasistencias: typedContent.data?.manualInasistencias || '',
+                        
+                        // Additional Teacher Fields
+                        manualTeacherName: typedContent.data?.manualTeacherName || '',
+                        manualTeacherCedulaPrefix: typedContent.data?.manualTeacherCedulaPrefix || 'V',
+                        manualTeacherCedulaNumber: typedContent.data?.manualTeacherCedulaNumber || '',
+                        
+                        // Text Areas
+                        actitudesHabitos: typedContent.data?.actitudesHabitos || '',
+                        recomendacionesDocente: typedContent.data?.recomendacionesDocente || ''
+                    };
+
+                    // Merge all dynamic grade keys (e.g., "0-1": "Consolidado") into formData
                     if (typedContent.data) {
+                        const isPrimary = (typedContent.level || '').includes('Grado');
+                        
                         for (const key in typedContent.data) {
-                            setValue(key, typedContent.data[key]);
+                            // Migrate legacy "Sin Evidencias" to "Con Ayuda" ONLY for Primary levels
+                            if (isPrimary && typedContent.data[key] === "Sin Evidencias") {
+                                typedContent.data[key] = "Con Ayuda";
+                            }
                         }
+                        Object.assign(formData, typedContent.data);
                     }
+
+                    // Perform reset to populate the form
+                    reset(formData);
+
                     if (typedContent.attendance) {
                         setAttendanceStats(typedContent.attendance);
-                        if (typedContent.data?.diasHabiles) {
-                             setValue('diasHabiles', typedContent.data.diasHabiles);
-                        }
                     }
                 })
-                .catch(() => setError("No se pudo cargar la boleta para editar."))
+                .catch((err) => {
+                    console.error(err);
+                    setError("No se pudo cargar la boleta para editar.");
+                })
                 .finally(() => setLoading(false));
         }
-    }, [id, isEditMode, user, setValue, students, lapsos]);
+    }, [id, isEditMode, user, reset, students, lapsos]);
 
     const filteredStudents = useMemo(() => {
         if (!userSearch) return students;
@@ -359,7 +367,7 @@ const BoletaFormPage: React.FC = () => {
         setLoading(true);
         setError('');
         
-        const { userId, level, signatoryName, signatoryTitle, turno, diasHabiles, lapsoId, ...gradesData } = data;
+        const { userId, level, signatoryName, signatoryTitle, turno, diasHabiles, lapsoId, manualAsistencias, manualInasistencias, manualTeacherName, manualTeacherCedulaPrefix, manualTeacherCedulaNumber, ...gradesData } = data;
         
         const selectedLapso = lapsos.find(l => l.lapsoID === Number(lapsoId));
         
@@ -370,7 +378,15 @@ const BoletaFormPage: React.FC = () => {
          
         const contentPayload = {
             level: level,
-            data: {...gradesData, diasHabiles: finalAttendance.total},
+            data: {
+                ...gradesData, 
+                diasHabiles: finalAttendance.total,
+                manualAsistencias, 
+                manualInasistencias,
+                manualTeacherName,
+                manualTeacherCedulaPrefix,
+                manualTeacherCedulaNumber
+            },
             turno: turno,
             attendance: finalAttendance,
             schoolName: schoolName,
@@ -425,7 +441,7 @@ const BoletaFormPage: React.FC = () => {
                             <li><span className="font-semibold">Consolidado:</span> Aprendizaje logrado</li>
                             <li><span className="font-semibold">En proceso:</span> En vía para lograr el aprendizaje</li>
                             <li><span className="font-semibold">Iniciado:</span> Requiere ayuda para lograr el aprendizaje</li>
-                            <li><span className="font-semibold">Sin Evidencias:</span> Inasistente</li>
+                            <li><span className="font-semibold">Con Ayuda:</span> Inasistente</li>
                         </ul>
                     </div>
                     <div className="flex justify-end pt-4 mt-4 border-t">
@@ -520,7 +536,7 @@ const BoletaFormPage: React.FC = () => {
                 {/* Only show the rest of the form if a valid level is selected */}
                 {selectedLevel && (
                     <div className="animate-fade-in-down">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4 mt-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 border-t pt-4 mt-4">
                              <div>
                                 <label className="block text-sm font-medium text-text-primary">Turno:</label>
                                 <select {...register('turno')} className="mt-1 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md">
@@ -529,35 +545,91 @@ const BoletaFormPage: React.FC = () => {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-text-primary">Días Hábiles del Lapso</label>
+                                <label className="block text-sm font-medium text-text-primary">Días Hábiles</label>
                                 <input 
                                     type="number"
                                     {...register('diasHabiles')} 
-                                    readOnly
-                                    className="mt-1 block w-full px-3 py-2 border border-border rounded-md focus:outline-none bg-background text-text-secondary cursor-not-allowed"
-                                    placeholder="Seleccione un lapso..."
+                                    className="mt-1 block w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent/50"
+                                    placeholder="Total días"
                                 />
                                 {dateRangeInfo && (
                                     <p className="text-xs text-info mt-1">{dateRangeInfo}</p>
                                 )}
                             </div>
-                            <div className="md:col-span-2">
-                                <label className="block text-sm font-medium text-text-primary">Características de la actuación escolar:</label>
-                                <textarea 
-                                    {...register('schoolPerformanceFeatures')} 
-                                    rows={3} 
-                                    maxLength={250}
-                                    className="mt-1 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-accent/50"
-                                    placeholder="Escriba aquí las características generales..."
+                            <div>
+                                <label className="block text-sm font-medium text-text-primary">Asistencias (Manual)</label>
+                                <input 
+                                    type="text"
+                                    {...register('manualAsistencias')} 
+                                    className="mt-1 block w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent/50"
+                                    placeholder="Ej: 15"
                                 />
-                                <div className="text-right text-xs text-secondary mt-1">
-                                    {schoolPerformanceFeaturesValue.length}/250 caracteres
-                                </div>
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-text-primary">Inasistencias (Manual)</label>
+                                <input 
+                                    type="text"
+                                    {...register('manualInasistencias')} 
+                                    className="mt-1 block w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent/50"
+                                    placeholder="Ej: 2"
+                                />
+                            </div>
+                            <div className="col-span-full">
+                                <p className="text-xs text-secondary mt-1">Si deja los campos de asistencia vacíos, el usuario podrá llenarlos a mano en la boleta impresa.</p>
+                            </div>
+                            {!selectedLevel?.includes('Grado') && (
+                                <div className="md:col-span-2 lg:col-span-4">
+                                    <label className="block text-sm font-medium text-text-primary">Características de la actuación escolar:</label>
+                                    <textarea 
+                                        {...register('schoolPerformanceFeatures')} 
+                                        rows={3} 
+                                        maxLength={250}
+                                        className="mt-1 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-accent/50"
+                                        placeholder="Escriba aquí las características generales..."
+                                    />
+                                    <div className="text-right text-xs text-secondary mt-1">
+                                        {schoolPerformanceFeaturesValue.length}/250 caracteres
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {selectedLevel?.includes('Grado') && (
                             <div className="grid grid-cols-1 gap-4 pt-4 mt-4 border-t">
+                                {/* Additional Teacher Section */}
+                                <div className="bg-background p-4 rounded-md border border-border">
+                                    <h3 className="text-sm font-bold text-text-primary mb-2">Profesor Adicional (Opcional)</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs text-text-secondary">Nombre Completo</label>
+                                            <input 
+                                                {...register('manualTeacherName')} 
+                                                className="mt-1 w-full px-3 py-2 border border-border bg-surface rounded text-sm"
+                                                placeholder="Ej. María Pérez"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-text-secondary">Cédula</label>
+                                            <div className="flex gap-2">
+                                                <select 
+                                                    {...register('manualTeacherCedulaPrefix')}
+                                                    className="mt-1 w-20 px-2 py-2 border border-border bg-surface rounded text-sm"
+                                                >
+                                                    <option value="V">V</option>
+                                                    <option value="E">E</option>
+                                                    <option value="P">P</option>
+                                                </select>
+                                                <input 
+                                                    {...register('manualTeacherCedulaNumber')}
+                                                    className="mt-1 w-full px-3 py-2 border border-border bg-surface rounded text-sm"
+                                                    placeholder="12345678"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-secondary mt-1">Este profesor aparecerá junto al profesor principal en la boleta.</p>
+                                </div>
+
                                 <div>
                                     <label className="block text-sm font-medium text-text-primary">Actitudes, Hábitos de Trabajo:</label>
                                     <textarea {...register('actitudesHabitos')} maxLength={250} rows={3} className="mt-1 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md" />
@@ -589,7 +661,7 @@ const BoletaFormPage: React.FC = () => {
                         {indicators.length > 0 && (
                             <div className="mt-6 border-t pt-6">
                                 <h2 className="text-xl font-semibold mb-4 text-text-primary">Indicadores - {selectedLevel}</h2>
-                                <DescriptiveGradeSheet indicators={indicators} register={register} watch={watch} />
+                                <DescriptiveGradeSheet indicators={indicators} register={register} watch={watch} level={selectedLevel} />
                             </div>
                         )}
                     </div>

@@ -6,11 +6,17 @@ interface DescriptiveGradeSheetProps {
     indicators: IndicatorSection[];
     register: UseFormRegister<any>;
     watch: UseFormWatch<any>;
+    level?: string;
 }
 
-const DESCRIPTIVE_GRADE_OPTIONS = ["Consolidado", "En proceso", "Iniciado", "Sin Evidencias"];
+const DescriptiveGradeSheet: React.FC<DescriptiveGradeSheetProps> = ({ indicators, register, watch, level = '' }) => {
+    
+    // Determine the 4th option based on the level
+    const isPrimary = level.includes('Grado');
+    const lastOption = isPrimary ? "Con Ayuda" : "Sin Evidencias";
+    
+    const OPTIONS = ["Consolidado", "En proceso", "Iniciado", lastOption];
 
-const DescriptiveGradeSheet: React.FC<DescriptiveGradeSheetProps> = ({ indicators, register, watch }) => {
     return (
         <div className="space-y-6">
             {indicators.map((section, sectionIndex) => (
@@ -21,7 +27,7 @@ const DescriptiveGradeSheet: React.FC<DescriptiveGradeSheetProps> = ({ indicator
                             <thead className="bg-header-light">
                                 <tr>
                                     <th className="py-2 px-4 text-left font-semibold w-2/5">Indicadores</th>
-                                    {DESCRIPTIVE_GRADE_OPTIONS.map(option => (
+                                    {OPTIONS.map(option => (
                                         <th key={option} className="py-2 px-4 text-center font-semibold">{option}</th>
                                     ))}
                                 </tr>
@@ -32,7 +38,7 @@ const DescriptiveGradeSheet: React.FC<DescriptiveGradeSheetProps> = ({ indicator
                                     return (
                                         <tr key={indicatorIndex} className="border-t border-border hover:bg-background">
                                             <td className="py-2 px-4">{indicator.text}</td>
-                                            {DESCRIPTIVE_GRADE_OPTIONS.map(option => (
+                                            {OPTIONS.map(option => (
                                                 <td key={option} className="py-2 px-4 text-center">
                                                     <input
                                                         type="radio"

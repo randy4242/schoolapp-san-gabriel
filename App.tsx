@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
@@ -55,6 +56,15 @@ import WithholdingListPage from './pages/withholdings/WithholdingListPage';
 import WithholdingFormPage from './pages/withholdings/WithholdingFormPage';
 import BoletaListPage from './pages/boletas/BoletaListPage';
 import BoletaFormPage from './pages/boletas/BoletaFormPage';
+
+// Virtual Classroom Pages
+import MyCoursesPage from './pages/virtual/MyCoursesPage';
+import MyEvaluationsPage from './pages/virtual/MyEvaluationsPage';
+import MyGradesPage from './pages/virtual/MyGradesPage';
+import ForumsPage from './pages/virtual/ForumsPage';
+import ExamBuilderPage from './pages/virtual/ExamBuilderPage';
+import TakeExamPage from './pages/virtual/TakeExamPage';
+import SubmissionsListPage from './pages/evaluations/SubmissionsListPage';
 
 // Components
 import ProtectedRoute from './components/ProtectedRoute';
@@ -119,7 +129,16 @@ const App: React.FC = () => {
             <Route path="evaluations/assign/:evaluationId" element={<AssignGradesPage />} />
             <Route path="evaluations/assign-descriptive/:evaluationId" element={<AssignDescriptiveGradesPage />} />
             <Route path="evaluations/evaluate-ai/:evaluationId" element={<AiEvaluationPage />} />
+            <Route path="evaluations/submissions" element={<SubmissionsListPage />} />
             
+            {/* Virtual Classroom */}
+            <Route path="virtual/my-courses" element={<MyCoursesPage />} />
+            <Route path="virtual/evaluations" element={<MyEvaluationsPage />} />
+            <Route path="virtual/grades" element={<MyGradesPage />} />
+            <Route path="virtual/forums" element={<ForumsPage />} />
+            <Route path="virtual/builder/:evaluationId" element={<ExamBuilderPage />} />
+            <Route path="virtual/exams/:evaluationId/take" element={<TakeExamPage />} />
+
             {/* Notifications */}
             <Route path="notifications/send" element={<SendNotificationPage />} />
             <Route path="notifications/list" element={<NotificationListPage />} />
