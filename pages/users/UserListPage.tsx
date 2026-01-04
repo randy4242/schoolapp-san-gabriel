@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
@@ -492,7 +491,7 @@ const UserListPage: React.FC = () => {
       )}
 
       {userToDelete && (
-        <Modal isOpen={!!userToDelete} onClose={() => setUserToDelete(null)} title="Confirmar Eliminación">
+        <Modal isOpen={true} onClose={() => setUserToDelete(null)} title="Confirmar Eliminación">
             <div>
                 <p className="text-text-primary">
                     ¿Estás seguro de que quieres eliminar al usuario "<strong>{userToDelete.userName}</strong>"?
@@ -540,6 +539,7 @@ const UserListPage: React.FC = () => {
           <UserRelationshipsModal
               user={viewingRelationshipsFor}
               onClose={() => setViewingRelationshipsFor(null)}
+              onSwitchUser={setViewingRelationshipsFor}
           />
       )}
       {viewingDetailsFor && (

@@ -1,9 +1,10 @@
+
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
-import { Course, Evaluation, AuthenticatedUser } from '../../types';
+import { Course, Evaluation, AuthenticatedUser, Lapso } from '../../types';
 
 type FormInputs = {
     title: string;
@@ -11,6 +12,8 @@ type FormInputs = {
     descriptionPercent: number;
     date: string;
     courseID: number;
+    isVirtual: boolean;
+    virtualType?: number | null;
 };
 
 /**
@@ -64,18 +67,24 @@ const EvaluationFormPage: React.FC = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [taughtCourses, setTaughtCourses] = useState<Course[]>([]);
+    const [lapsos, setLapsos] = useState<Lapso[]>([]);
     const [originalEvaluation, setOriginalEvaluation] = useState<Evaluation | null>(null);
     const [isLocked, setIsLocked] = useState(false);
 
-    const { register, handleSubmit, setValue, control, formState: { errors } } = useForm<FormInputs>();
+    const { register, handleSubmit, setValue, control, watch, formState: { errors } } = useForm<FormInputs>();
+    const isVirtual = watch('isVirtual');
 
     useEffect(() => {
         const fetchData = async () => {
             if (user?.schoolId && user.userId) {
                 setLoading(true);
                 try {
-                    const courses = await apiService.getTaughtCourses(user.userId, user.schoolId);
+                    const [courses, lapsosData] = await Promise.all([
+                        apiService.getTaughtCourses(user.userId, user.schoolId),
+                        apiService.getLapsos(user.schoolId)
+                    ]);
                     setTaughtCourses(courses);
+                    setLapsos(lapsosData);
 
                     if (isEditMode) {
                         const evalData = await apiService.getEvaluationById(parseInt(id!), user.schoolId);
@@ -88,6 +97,8 @@ const EvaluationFormPage: React.FC = () => {
                         setValue('title', evalData.title);
                         setValue('date', evalData.date.split('T')[0]);
                         setValue('courseID', evalData.courseID);
+                        setValue('isVirtual', evalData.isVirtual || false);
+                        setValue('virtualType', evalData.virtualType ?? null);
                         
                         const overrideMatch = evalData.description?.match(/@@OVERRIDE:.*$/);
                         const cleanDescription = overrideMatch ? evalData.description.replace(overrideMatch[0], '').trim() : evalData.description;
@@ -115,7 +126,7 @@ const EvaluationFormPage: React.FC = () => {
         };
         fetchData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [id, isEditMode, user]);
+    }, [id, isEditMode, user, setValue]);
 
     const onSubmit = async (data: FormInputs) => {
         if (!user?.schoolId || !user.userId) {
@@ -155,6 +166,8 @@ const EvaluationFormPage: React.FC = () => {
                     courseID: data.courseID,
                     userID: originalEvaluation!.userID,
                     schoolID: originalEvaluation!.schoolID,
+                    isVirtual: data.isVirtual,
+                    virtualType: data.isVirtual ? data.virtualType : null,
                 };
                 await apiService.updateEvaluation(parseInt(id!), payload);
             } else {
@@ -165,6 +178,8 @@ const EvaluationFormPage: React.FC = () => {
                     courseID: data.courseID,
                     userID: user.userId,
                     schoolID: user.schoolId,
+                    isVirtual: data.isVirtual,
+                    virtualType: data.isVirtual ? data.virtualType : null,
                 } as any);
             }
             navigate('/evaluations');
@@ -180,6 +195,12 @@ const EvaluationFormPage: React.FC = () => {
             <h1 className="text-2xl font-bold text-text-primary mb-6">{isEditMode ? 'Editar Evaluación' : 'Crear Evaluación'}</h1>
             
             {error && <p className="bg-danger-light text-danger p-3 rounded mb-4">{error}</p>}
+            
+            {lapsos.length === 0 && !loading && (
+                <div className="bg-warning/20 text-warning-dark p-3 rounded mb-4 text-sm">
+                    ⚠️ No hay lapsos activos configurados en el sistema. Es posible que no pueda guardar la evaluación si la fecha no coincide con un lapso válido. Contacte al administrador.
+                </div>
+            )}
             
             {loading && isEditMode ? <p>Cargando datos...</p> : (
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -209,6 +230,19 @@ const EvaluationFormPage: React.FC = () => {
                         <label className="block text-sm font-medium text-text-primary">Fecha</label>
                         <input type="date" {...register('date', { required: 'La fecha es requerida' })} disabled={isLocked} className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent disabled:bg-background" />
                         {errors.date && <p className="text-danger text-xs mt-1">{errors.date.message}</p>}
+                        
+                        {lapsos.length > 0 && (
+                            <div className="mt-2 text-xs text-info-text bg-info-light/20 p-2 rounded border border-info-light">
+                                <span className="font-bold block mb-1">Fechas permitidas (Lapsos):</span>
+                                <ul className="space-y-1">
+                                    {lapsos.map(l => (
+                                        <li key={l.lapsoID}>
+                                            <span className="font-semibold text-primary">{l.nombre}:</span> {new Date(l.fechaInicio).toLocaleDateString()} - {new Date(l.fechaFin).toLocaleDateString()}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
                     </div>
 
                     <div>
@@ -219,6 +253,39 @@ const EvaluationFormPage: React.FC = () => {
                         </select>
                         {errors.courseID && <p className="text-danger text-xs mt-1">{errors.courseID.message}</p>}
                     </div>
+
+                    <div className="flex items-center">
+                        <input 
+                            type="checkbox" 
+                            {...register('isVirtual')} 
+                            id="isVirtual"
+                            disabled={isLocked}
+                            className="h-4 w-4 rounded border-border text-primary focus:ring-accent disabled:bg-gray-200"
+                        />
+                        <label htmlFor="isVirtual" className="ml-2 block text-sm font-medium text-text-primary">
+                            Requiere Aula Virtual
+                        </label>
+                    </div>
+
+                    {isVirtual && (
+                        <div className="animate-fade-in-down p-4 bg-background border border-border rounded-md">
+                            <label className="block text-sm font-medium text-text-primary">Tipo de Evaluación Virtual</label>
+                            <select
+                                {...register('virtualType', {
+                                    valueAsNumber: true,
+                                    validate: value => !isVirtual || (value != null && value > 0) || 'Debe seleccionar un tipo de evaluación virtual'
+                                })}
+                                disabled={isLocked}
+                                className="mt-1 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent disabled:bg-background"
+                            >
+                                <option value="">-- Seleccione un tipo --</option>
+                                <option value="1">Examen con contenido (Material de estudio + Preguntas)</option>
+                                <option value="2">Examen de selección (Solo preguntas)</option>
+                                <option value="3">Tarea (Entrega de archivo o texto)</option>
+                            </select>
+                            {errors.virtualType && <p className="text-danger text-xs mt-1">{errors.virtualType.message}</p>}
+                        </div>
+                    )}
 
                     <div className="flex justify-end space-x-4 pt-4">
                         <Link to="/evaluations" className="bg-background text-text-primary py-2 px-4 rounded hover:bg-border transition-colors">Cancelar</Link>

@@ -7,10 +7,9 @@ class GeminiService {
     constructor() {
         // HÍBRIDO: Detección de entorno.
         // 1. Google AI Studio: Inyecta process.env.API_KEY automáticamente.
-        // 2. Local Vite (opcional): Puede usar import.meta.env.VITE_GEMINI_API_KEY.
-        // 3. Producción (Vercel): No tiene estas variables en el frontend por seguridad.
+        // FIX: Obtained API Key exclusively from process.env.API_KEY. Fallback removed.
         
-        const apiKey = process.env.API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+        const apiKey = process.env.API_KEY;
 
         if (apiKey) {
             console.log("GeminiService: API Key detectada en entorno local. Usando cliente directo.");
@@ -28,11 +27,13 @@ class GeminiService {
                 // Desestructuramos params para asegurar que coincidan con la firma del SDK
                 const { model, contents, config } = params;
 
+                // FIX: Updated default model to gemini-3-flash-preview for basic text tasks.
                 const response = await this.localClient.models.generateContent({
-                    model: model || "gemini-2.5-flash",
+                    model: model || "gemini-3-flash-preview",
                     contents,
                     config
                 });
+                // FIX: Accessing response.text property directly.
                 return { text: response.text };
             } catch (error) {
                 console.error("Gemini Local Error:", error);

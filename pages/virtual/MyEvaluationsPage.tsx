@@ -28,16 +28,16 @@ const MyEvaluationsPage: React.FC = () => {
             setLoading(true);
             setError('');
             try {
-                // Fetch all evaluations for the user and all courses for the school to map names
+                // Si alguna de estas falla con 404, el apiService devolverá [] automáticamente
                 const [evalsData, coursesData] = await Promise.all([
                     apiService.getEvaluations(user.schoolId, user.userId),
                     apiService.getCourses(user.schoolId)
                 ]);
-                setEvaluations(evalsData);
-                setCourses(coursesData);
+                setEvaluations(Array.isArray(evalsData) ? evalsData : []);
+                setCourses(Array.isArray(coursesData) ? coursesData : []);
             } catch (err) {
-                setError('No se pudieron cargar las evaluaciones.');
-                console.error(err);
+                console.error("Error fetching evaluations:", err);
+                setError('Ocurrió un error al cargar las evaluaciones.');
             } finally {
                 setLoading(false);
             }
@@ -61,12 +61,24 @@ const MyEvaluationsPage: React.FC = () => {
         setOpenCourse(prev => (prev === courseName ? null : courseName));
     };
 
-    if (loading) return <p>Cargando evaluaciones...</p>;
-    if (error) return <p className="text-danger bg-danger-light p-3 rounded">{error}</p>;
+    const getCleanDescription = (desc: string) => {
+        if (!desc) return '';
+        return desc.replace(/@@OVERRIDE:.*$/, '').trim();
+    };
+
+    if (loading) return (
+        <div className="flex flex-col items-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            <p className="mt-4 text-text-secondary">Cargando evaluaciones...</p>
+        </div>
+    );
 
     return (
         <div>
             <h1 className="text-3xl font-bold text-primary mb-6">Mis Evaluaciones</h1>
+            
+            {error && <p className="text-danger bg-danger-light p-3 rounded mb-4">{error}</p>}
+
             {Object.keys(groupedEvaluations).length > 0 ? (
                 <div className="space-y-4">
                     {Object.entries(groupedEvaluations).map(([courseName, evals]) => (
@@ -82,14 +94,14 @@ const MyEvaluationsPage: React.FC = () => {
                                 </div>
                             </button>
                             {openCourse === courseName && (
-                                <div className="p-4 border-t border-border">
+                                <div className="p-4 border-t border-border animate-fade-in-down">
                                     <ul className="space-y-3">
                                         {evals.map(ev => (
                                             <li key={ev.evaluationID} className="bg-surface p-3 rounded-md shadow-sm border border-border-dark">
                                                 <div className="flex justify-between items-start">
                                                     <div>
                                                         <p className="font-semibold text-text-primary">{ev.title}</p>
-                                                        <p className="text-sm text-text-secondary mt-1 line-clamp-2">{ev.description}</p>
+                                                        <p className="text-sm text-text-secondary mt-1 line-clamp-2">{getCleanDescription(ev.description)}</p>
                                                     </div>
                                                     <div className="text-right ml-4 flex-shrink-0 flex flex-col items-end gap-2">
                                                         <p className="text-sm text-text-secondary whitespace-nowrap">{new Date(ev.date).toLocaleDateString('es-ES')}</p>
@@ -125,9 +137,9 @@ const MyEvaluationsPage: React.FC = () => {
                     ))}
                 </div>
             ) : (
-                <div className="text-center py-8 bg-surface rounded-lg shadow-md">
-                    <ClipboardCheckIcon />
-                    <p className="text-text-secondary mt-2">No tienes evaluaciones asignadas.</p>
+                <div className="text-center py-12 bg-surface rounded-lg border border-dashed border-border shadow-sm">
+                    <ClipboardCheckIcon className="w-12 h-12 mx-auto text-text-tertiary mb-3" />
+                    <p className="text-text-secondary">No se encontraron evaluaciones pendientes para este usuario en este colegio.</p>
                 </div>
             )}
             

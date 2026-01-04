@@ -83,6 +83,8 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const isParent = user?.roleId === 3;
+  // MODIFICACIÓN: Identificar estudiantes
+  const isStudent = user?.roleId === 1;
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -95,6 +97,13 @@ const DashboardPage: React.FC = () => {
               setChildren(childrenData);
               
               // Also fetch basic school info for the welcome title
+              const schoolName = await apiService.getSchoolName(user.schoolId).catch(() => "");
+              setStats({ 
+                  schoolName: schoolName, 
+                  totalUsers: 0, students: 0, teachers: 0, parents: 0, courses: 0 
+              });
+          } else if (isStudent) {
+              // MODIFICACIÓN: Estudiantes no necesitan cargar estadísticas administrativas
               const schoolName = await apiService.getSchoolName(user.schoolId).catch(() => "");
               setStats({ 
                   schoolName: schoolName, 
@@ -113,19 +122,24 @@ const DashboardPage: React.FC = () => {
       }
     };
     fetchStats();
-  }, [user, isParent]);
+  }, [user, isParent, isStudent]);
 
   if (loading) {
     return <div>Cargando panel...</div>;
   }
 
+  // MODIFICACIÓN: Título adaptado a estudiantes
   const welcomeTitle = isParent 
     ? `Bienvenido a ${stats?.schoolName || 'la escuela'} ${user?.userName}`
+    : isStudent 
+    ? `Bienvenido a la Aula Virtual, ${user?.userName}`
     : `Panel de Control ${stats?.schoolName ? stats.schoolName : ''}`;
 
   const welcomeSubtitle = isParent
-    ? "Gestiona y visualiza las boletas de tus hijos. adelante."
-    : "Administra los contenidos y usuarios de la aplicación móvil.";
+    ? "Gestiona y visualiza las boletas de tus hijos."
+    : isStudent
+    ? "Aquí podrás ver tus cursos, evaluaciones y descargar tus boletas."
+    : "Administra los contenidos y usuarios de la institución.";
 
   return (
     <div>
@@ -136,14 +150,15 @@ const DashboardPage: React.FC = () => {
             <p className="text-text-secondary">{welcomeSubtitle}</p>
         </div>
       
-      {!isParent ? (
+      {/* MODIFICACIÓN: Ocultar tarjetas de estadísticas para roles restringidos */}
+      {!isParent && !isStudent ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <StatCard title="Usuarios Totales" value={stats?.totalUsers ?? 0} icon={<TotalUsersIcon />} />
             <StatCard title="Estudiantes" value={stats?.students ?? 0} icon={<StudentsIcon />} />
             <StatCard title="Profesores" value={stats?.teachers ?? 0} icon={<TeachersIcon />} />
             <StatCard title="Cursos Activos" value={stats?.courses ?? 0} icon={<CoursesIcon />} />
         </div>
-      ) : (
+      ) : isParent ? (
         <div className="mb-8">
             <h2 className="text-xl font-semibold text-text-primary mb-4">Mis Hijos</h2>
             {children.length > 0 ? (
@@ -156,7 +171,7 @@ const DashboardPage: React.FC = () => {
                 <p className="text-text-secondary italic">No se encontraron hijos asociados a tu cuenta.</p>
             )}
         </div>
-      )}
+      ) : null}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <ActionCard to="/users" title="Gestión de Usuarios" description="Gestiona estudiantes, profesores y padres de familia." permission={hasPermission([6, 7])} />
@@ -167,8 +182,8 @@ const DashboardPage: React.FC = () => {
         <ActionCard to="/extracurriculars" title="Actividades Extra" description="Gestiona las actividades extracurriculares del colegio." permission={hasPermission([6, 7])} />
         <ActionCard to="/certificates" title="Gestión de Constancias" description="Genera y administra constancias de estudio, conducta y más." permission={hasPermission([6])} />
         
-        {/* Boletas is the main action for parents */}
-        <ActionCard to="/boletas" title="Boletas de Calificaciones" description={isParent ? "Visualiza las boletas aprobadas de tus hijos." : "Genera y administra boletas de calificaciones."} permission={hasPermission([6, 7, 2, 9, 10, 3])} />
+        {/* Boletas - MODIFICACIÓN: Permitir también a estudiantes */}
+        <ActionCard to="/boletas" title="Boletas de Calificaciones" description={isParent || isStudent ? "Visualiza las boletas aprobadas." : "Genera y administra boletas de calificaciones."} permission={hasPermission([6, 7, 2, 9, 10, 3, 1])} />
         
         <ActionCard to="/products" title="Gestión de Productos" description="Administra productos y servicios para la venta." permission={hasPermission([6])} />
         <ActionCard to="/enrollments" title="Inscripciones" description="Gestiona las inscripciones de los estudiantes a los cursos." permission={hasPermission([6])} />

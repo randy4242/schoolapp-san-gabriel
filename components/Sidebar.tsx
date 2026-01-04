@@ -40,7 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   const Is = (roles: number[]) => hasPermission(roles);
 
   const allowedSchoolsForBoletas = [5, 6, 7, 8, 9];
-  const canViewBoletas = user && allowedSchoolsForBoletas.includes(user.schoolId);
+  const canViewBoletas = user && (allowedSchoolsForBoletas.includes(user.schoolId) || user.roleId === 1);
 
   const lapsoLabel = user && [6, 7, 8, 9].includes(user.schoolId) ? 'Momentos' : 'Lapsos';
 
@@ -48,14 +48,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
     {
       label: 'Aula Virtual',
       icon: <BeakerIcon />,
-      // Only available for School ID 5
-      permission: (has) => user?.schoolId === 5 && has([1, 2, 3, 6, 7, 8, 9, 10, 11]), 
+      permission: (has) => has([1, 2, 3, 6, 7, 8, 9, 10, 11]), 
       links: [
         { to: '/virtual/my-courses', label: 'Mis Cursos', icon: <span />, permission: (has) => has([1, 2, 3, 6, 7, 8, 9, 10, 11]) },
-        { to: '/virtual/evaluations', label: 'Mis Evaluaciones', icon: <span />, permission: (has) => has([1, 3, 11]) }, // Student/Parent view
-        { to: '/virtual/grades', label: 'Boletín/Notas', icon: <span />, permission: (has) => has([1, 3, 11]) }, // Student/Parent view
+        { to: '/virtual/evaluations', label: 'Mis Evaluaciones', icon: <span />, permission: (has) => has([1, 3, 11, 6, 7]) },
+        { to: '/virtual/grades', label: 'Boletín/Notas', icon: <span />, permission: (has) => has([1, 3, 11, 6, 7]) },
         { to: '/virtual/forums', label: 'Foros de Dudas', icon: <span />, permission: (has) => has([1, 2, 6, 7, 8, 9, 10]) },
-        { to: '/evaluations/submissions', label: 'Entregas Recibidas', icon: <span />, permission: (has) => has([2, 6, 7, 8, 9, 10]) }, // Teachers
+        { to: '/evaluations/submissions', label: 'Entregas Recibidas', icon: <span />, permission: (has) => has([2, 6, 7, 8, 9, 10]) },
       ].filter(l => l.permission(Is))
     },
     {
@@ -110,9 +109,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
     {
       label: 'Boletas',
       icon: <DocumentTextIcon />,
-      permission: (has) => (canViewBoletas ?? false) && has([6, 7, 2, 9, 10, 3]),
+      // MODIFICACIÓN: Permitir a estudiantes (Rol 1) ver boletas
+      permission: (has) => (canViewBoletas ?? false) && has([6, 7, 2, 9, 10, 3, 1]),
       links: [
-        { to: '/boletas', label: 'Ver Boletas', icon: <span />, permission: (has) => has([6, 7, 2, 9, 10, 3]) },
+        { to: '/boletas', label: 'Ver Boletas', icon: <span />, permission: (has) => has([6, 7, 2, 9, 10, 3, 1]) },
         { to: '/boletas/create', label: 'Crear Boleta', icon: <span />, permission: (has) => has([6, 7, 2, 9, 10]) },
       ].filter(l => l.permission(Is))
     },
@@ -138,7 +138,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
         { to: '/gl/reports', label: 'Reportes Contables', icon: <span />, permission: (has) => has([6, 7]) },
       ].filter(l => l.permission(Is))
     },
-     // Add other sections here based on _Layout.cshtml logic
   ];
   
   const singleLinks: (NavLink & { permission: (has: (roles: number[]) => boolean) => boolean })[] = [

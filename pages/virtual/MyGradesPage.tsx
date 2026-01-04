@@ -30,7 +30,6 @@ const MyGradesPage: React.FC = () => {
                 setLapsos(lapsosData);
                 
                 if (lapsosData.length > 0) {
-                    // Default to the last lapso (usually current) or first
                     setSelectedLapsoId(lapsosData[lapsosData.length - 1].lapsoID); 
                 }
 
@@ -45,8 +44,7 @@ const MyGradesPage: React.FC = () => {
                 }
 
             } catch (err: any) {
-                setError('Error al cargar datos iniciales.');
-                console.error(err);
+                console.error("Initialization error:", err);
             } finally {
                 setLoading(false);
             }
@@ -73,7 +71,14 @@ const MyGradesPage: React.FC = () => {
                     selectedLapsoId, 
                     user.schoolId
                 );
-                setGradesData(data);
+                
+                if (data && data.groups) {
+                    setGradesData(data);
+                    // Abrir automáticamente el primer grupo si solo hay uno
+                    if (data.groups.length === 1) setOpenAccordion('group-0');
+                } else {
+                    setGradesData(null);
+                }
 
                 // Fetch Average for this specific lapso
                 try {
@@ -84,7 +89,9 @@ const MyGradesPage: React.FC = () => {
                 }
                 
             } catch (err: any) {
-                setError('No se pudieron cargar las calificaciones.');
+                // Si falla por 404, el apiService ya devuelve algo que no lanza error, 
+                // pero si hay un error real de red, lo capturamos aquí.
+                console.error("Error loading grades:", err);
                 setGradesData(null);
                 setAverageScore('—');
             } finally {
@@ -116,7 +123,6 @@ const MyGradesPage: React.FC = () => {
             </h1>
 
             <div className="bg-surface p-4 rounded-lg shadow-md border border-border mb-6 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                {/* Parent: Child Selector */}
                 {isParent && (
                     <div>
                         <label className="block text-sm font-medium text-text-secondary mb-1">Estudiante</label>
@@ -126,6 +132,7 @@ const MyGradesPage: React.FC = () => {
                                 onChange={(e) => setSelectedChildId(Number(e.target.value))}
                                 className="w-full p-2 pl-8 border border-border rounded bg-background focus:outline-none focus:ring-2 focus:ring-accent/50"
                             >
+                                {children.length === 0 && <option value="">No hay hijos asociados</option>}
                                 {children.map(child => (
                                     <option key={child.userID} value={child.userID}>{child.userName}</option>
                                 ))}
@@ -135,7 +142,6 @@ const MyGradesPage: React.FC = () => {
                     </div>
                 )}
 
-                {/* Lapso Selector */}
                 <div>
                     <label className="block text-sm font-medium text-text-secondary mb-1">Lapso Académico</label>
                     <select
@@ -143,13 +149,13 @@ const MyGradesPage: React.FC = () => {
                         onChange={(e) => setSelectedLapsoId(Number(e.target.value))}
                         className="w-full p-2 border border-border rounded bg-background focus:outline-none focus:ring-2 focus:ring-accent/50"
                     >
+                        {lapsos.length === 0 && <option value="">No hay lapsos configurados</option>}
                         {lapsos.map(lapso => (
                             <option key={lapso.lapsoID} value={lapso.lapsoID}>{lapso.nombre}</option>
                         ))}
                     </select>
                 </div>
 
-                {/* Average Display */}
                 <div className="bg-primary/5 p-2 rounded border border-primary/20 flex flex-col justify-center items-center h-full min-h-[60px]">
                     <span className="text-xs text-primary font-bold uppercase tracking-wider">Promedio Lapso</span>
                     <span className="text-2xl font-bold text-primary">{averageScore}</span>
@@ -157,18 +163,21 @@ const MyGradesPage: React.FC = () => {
             </div>
 
             {error && <div className="bg-danger-light text-danger p-4 rounded-lg mb-4">{error}</div>}
-            {loading && <p className="text-center py-8 text-text-secondary">Cargando calificaciones...</p>}
-
-            {!loading && !error && gradesData?.groups && (
+            
+            {loading ? (
+                <div className="flex flex-col items-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                    <p className="mt-4 text-text-secondary">Cargando calificaciones...</p>
+                </div>
+            ) : (
                 <div className="space-y-4">
-                    {gradesData.groups.length === 0 ? (
+                    {!gradesData || gradesData.groups.length === 0 ? (
                         <div className="text-center py-12 bg-surface rounded-lg border border-dashed border-border">
-                            <p className="text-text-secondary">No hay calificaciones registradas para este lapso.</p>
+                            <p className="text-text-secondary">No se encontraron calificaciones registradas para el estudiante en este lapso.</p>
                         </div>
                     ) : (
                         gradesData.groups.map((group, idx) => {
                             const isOpen = openAccordion === `group-${idx}`;
-                            // Calculate average for this specific subject if possible, otherwise just show list
                             const validGrades = group.items.filter(i => i.gradeValue !== null).map(i => i.gradeValue as number);
                             const subjectAvg = validGrades.length > 0 
                                 ? (validGrades.reduce((a, b) => a + b, 0) / validGrades.length).toFixed(2) 

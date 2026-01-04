@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray, Controller, SubmitHandler } from 'react-hook-form';
@@ -262,7 +263,8 @@ const AssignGradesPage: React.FC = () => {
         setPotentialMatches([]);
 
         try {
-            const modelId = 'gemini-2.5-flash';
+            // FIX: Updated model to gemini-3-flash-preview.
+            const modelId = 'gemini-3-flash-preview';
             const promptParts: any[] = [];
             
             // 1. Build Prompt Parts

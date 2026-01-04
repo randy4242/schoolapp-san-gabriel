@@ -137,7 +137,8 @@ const BulkEvaluationCreationPage: React.FC = () => {
         setError('');
 
         try {
-            const modelId = 'gemini-2.5-flash';
+            // FIX: Updated model to gemini-3-flash-preview.
+            const modelId = 'gemini-3-flash-preview';
             const contents: any[] = [];
             let docContext = "";
 

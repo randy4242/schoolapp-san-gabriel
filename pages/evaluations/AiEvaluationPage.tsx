@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Type } from "@google/genai";
@@ -115,7 +116,8 @@ const AiEvaluationPage: React.FC = () => {
         setStudents(prev => prev.map((s, i) => i === studentIndex ? { ...s, isProcessing: true, error: undefined } : s));
 
         try {
-            const modelId = 'gemini-2.5-flash';
+            // FIX: Updated model to gemini-3-flash-preview.
+            const modelId = 'gemini-3-flash-preview';
             const contents: any[] = [];
 
             // 1. Add Rubric

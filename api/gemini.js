@@ -18,24 +18,24 @@ export default async function handler(req, res) {
   }
 
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    // FIX: Using the mandated initialization for GoogleGenAI with process.env.API_KEY.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-    if (!apiKey) {
+    if (!process.env.API_KEY) {
       throw new Error("La API Key no está configurada en el servidor (Vercel).");
     }
 
     const { model, contents, config } = req.body;
-
-    const ai = new GoogleGenAI({ apiKey });
     
-    // Llamada al modelo usando el SDK
+    // FIX: Calling ai.models.generateContent directly as per text generation guidelines.
+    // Updated default model to gemini-3-flash-preview.
     const result = await ai.models.generateContent({
-      model: model || "gemini-2.5-flash",
+      model: model || "gemini-3-flash-preview",
       contents,
       config
     });
 
-    // Devolvemos el texto generado
+    // FIX: Accessing result.text property directly as per guidelines.
     return res.status(200).json({ text: result.text });
 
   } catch (error) {

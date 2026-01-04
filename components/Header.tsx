@@ -36,6 +36,7 @@ const Header: React.FC<{ toggleSidebar: () => void }> = ({ toggleSidebar }) => {
     const searchRef = useRef<HTMLDivElement>(null);
 
     const isParent = user?.roleId === 3;
+    const isStudent = user?.roleId === 1;
 
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
@@ -69,7 +70,8 @@ const Header: React.FC<{ toggleSidebar: () => void }> = ({ toggleSidebar }) => {
     }, []);
 
     useEffect(() => {
-        if (debouncedSearchTerm && user?.schoolId && user.userId && !isParent) {
+        // MODIFICACIÓN: Deshabilitar búsqueda para estudiantes y padres
+        if (debouncedSearchTerm && user?.schoolId && user.userId && !isParent && !isStudent) {
             setLoading(true);
             setDropdownVisible(true);
             apiService.globalSearch(user.schoolId, user.userId, debouncedSearchTerm)
@@ -91,7 +93,7 @@ const Header: React.FC<{ toggleSidebar: () => void }> = ({ toggleSidebar }) => {
             setNavResults([]);
             setDropdownVisible(false);
         }
-    }, [debouncedSearchTerm, user?.schoolId, user?.userId, hasPermission, searchableNavLinks, isParent]);
+    }, [debouncedSearchTerm, user?.schoolId, user?.userId, hasPermission, searchableNavLinks, isParent, isStudent]);
     
     const handleNavigate = (path: string, state?: object) => {
         navigate(path, { state });
@@ -120,7 +122,8 @@ const Header: React.FC<{ toggleSidebar: () => void }> = ({ toggleSidebar }) => {
                 </button>
             </div>
             
-            {!isParent && (
+            {/* MODIFICACIÓN: Ocultar barra de búsqueda para restringidos */}
+            {!isParent && !isStudent && (
                 <div className="flex-1 flex justify-center px-4">
                     <div className="relative w-full max-w-lg" ref={searchRef}>
                         <div className="relative">
@@ -211,7 +214,7 @@ const Header: React.FC<{ toggleSidebar: () => void }> = ({ toggleSidebar }) => {
                     </div>
                 </div>
             )}
-            {isParent && <div className="flex-1"></div>}
+            {(isParent || isStudent) && <div className="flex-1"></div>}
 
             <div className="flex items-center space-x-4">
                 <NotificationBell />

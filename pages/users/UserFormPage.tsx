@@ -1,14 +1,11 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useForm, SubmitHandler } from 'react-hook-form';
-import { Type } from "@google/genai";
 import { apiService } from '../../services/apiService';
-import { geminiService } from '../../services/geminiService';
 import { useAuth } from '../../hooks/useAuth';
 import { User, ROLES } from '../../types';
-import { EyeIcon, EyeOffIcon, CameraIcon, SpinnerIcon } from '../../components/icons';
-import Modal from '../../components/Modal';
+import { EyeIcon, EyeOffIcon } from '../../components/icons';
 
 type FormInputs = Omit<User, 'userID' | 'schoolID' | 'isBlocked'> & { password?: string };
 
@@ -23,13 +20,6 @@ const UserFormPage: React.FC = () => {
   
   const [cedulaPrefix, setCedulaPrefix] = useState('V');
   const [cedulaNumber, setCedulaNumber] = useState('');
-
-  // AI Extraction States
-  const [isExtractionModalOpen, setIsExtractionModalOpen] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [extractionError, setExtractionError] = useState('');
-  const [aiMissingFields, setAiMissingFields] = useState<Set<string>>(new Set());
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormInputs>();
 
@@ -69,129 +59,6 @@ const UserFormPage: React.FC = () => {
     }
   };
 
-  // --- AI Extraction Logic ---
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      setIsAnalyzing(true);
-      setExtractionError('');
-      setAiMissingFields(new Set());
-
-      try {
-          const modelId = 'gemini-2.5-flash';
-
-          // Convert file to base64
-          const base64Data = await new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-              reader.readAsDataURL(file);
-          });
-
-          const prompt = `
-              Analiza esta imagen de un documento de identidad. Extrae la siguiente información en formato JSON:
-              - userName: Nombre completo.
-              - cedula: Número de identificación (incluye V-, E-, etc si es visible, sino solo números).
-              - email: Correo electrónico (si aparece).
-              - phoneNumber: Número de teléfono (si aparece).
-              
-              Si un campo no está presente, devuélvelo como string vacío "". No inventes datos.
-          `;
-
-          const response = await geminiService.generateContent({
-              model: modelId,
-              contents: [
-                  { text: prompt },
-                  { inlineData: { mimeType: file.type, data: base64Data } }
-              ],
-              config: {
-                  responseMimeType: "application/json",
-                  responseSchema: {
-                      type: Type.OBJECT,
-                      properties: {
-                          userName: { type: Type.STRING },
-                          cedula: { type: Type.STRING },
-                          email: { type: Type.STRING },
-                          phoneNumber: { type: Type.STRING }
-                      }
-                  }
-              }
-          });
-
-          const textResponse = response.text;
-          if (!textResponse) throw new Error("No se obtuvo respuesta de la IA.");
-          
-          const data = JSON.parse(textResponse);
-
-          // Helper to clean data
-          const sanitize = (val: any) => (!val || val === 'null' || val === 'N/A') ? '' : String(val).trim();
-
-          const cleanUserName = sanitize(data.userName);
-          const cleanEmail = sanitize(data.email);
-          const cleanPhone = sanitize(data.phoneNumber);
-          const rawCedula = sanitize(data.cedula);
-
-          // Populate Form
-          setValue('userName', cleanUserName);
-          setValue('email', cleanEmail);
-          setValue('phoneNumber', cleanPhone);
-          
-          let cleanCedulaNumber = '';
-
-          if (rawCedula) {
-              const cleanCedula = rawCedula.toUpperCase();
-              const match = cleanCedula.match(/^([VEPvep])[- ]?(\d+)$/);
-              
-              if (match) {
-                  setCedulaPrefix(match[1]);
-                  setCedulaNumber(match[2]);
-                  cleanCedulaNumber = match[2];
-              } else {
-                  // Just numbers? Assume V
-                  const numbers = cleanCedula.replace(/[^0-9]/g, '');
-                  if (numbers) {
-                      setCedulaPrefix('V');
-                      setCedulaNumber(numbers);
-                      cleanCedulaNumber = numbers;
-                  }
-              }
-          } else {
-              // Clear if nothing found
-              setCedulaNumber('');
-          }
-
-          // Identify Missing Fields for Visual Feedback
-          const missing = new Set<string>();
-          if (!cleanUserName) missing.add('userName');
-          if (!cleanEmail) missing.add('email');
-          if (!cleanPhone) missing.add('phoneNumber');
-          if (!cleanCedulaNumber) missing.add('cedula');
-
-          setAiMissingFields(missing);
-          setIsExtractionModalOpen(false); // Close modal on success
-
-      } catch (err: any) {
-          console.error(err);
-          setExtractionError("No se pudieron extraer los datos. Intente con una imagen más clara.");
-      } finally {
-          setIsAnalyzing(false);
-          // Clear input
-          if (fileInputRef.current) fileInputRef.current.value = '';
-      }
-  };
-
-  const clearAiError = (field: string) => {
-      if (aiMissingFields.has(field)) {
-          setAiMissingFields(prev => {
-              const next = new Set(prev);
-              next.delete(field);
-              return next;
-          });
-      }
-  };
-
-
   const onSubmit: SubmitHandler<FormInputs> = async (data) => {
     if (!user?.schoolId) {
       setError("No se ha podido identificar el colegio.");
@@ -228,27 +95,12 @@ const UserFormPage: React.FC = () => {
     }
   };
 
-  const inputClass = (fieldName: string) => {
-      const base = "mt-1 block w-full px-3 py-2 bg-surface text-text-primary border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent";
-      if (aiMissingFields.has(fieldName)) {
-          return `${base} border-danger ring-1 ring-danger`; // Red border for missing AI fields
-      }
-      return `${base} border-border`;
-  };
+  const inputClass = "mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent";
 
   return (
     <div className="max-w-2xl mx-auto bg-surface p-8 rounded-lg shadow-md">
       <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-text-primary">{isEditMode ? 'Editar Usuario' : 'Crear Usuario'}</h1>
-          {!isEditMode && (
-              <button 
-                  type="button"
-                  onClick={() => setIsExtractionModalOpen(true)}
-                  className="bg-accent text-text-on-accent px-4 py-2 rounded-md hover:bg-accent/90 flex items-center text-sm font-bold shadow-md transition-all hover:-translate-y-0.5"
-              >
-                  <span className="mr-2">✨</span> Autocompletar con IA
-              </button>
-          )}
       </div>
       
       {error && <p className="bg-danger-light text-danger p-3 rounded mb-4">{error}</p>}
@@ -259,11 +111,7 @@ const UserFormPage: React.FC = () => {
             <label className="block text-sm font-medium text-text-primary">Nombre de Usuario</label>
             <input 
                 {...register('userName', { required: 'El nombre es requerido' })} 
-                className={inputClass('userName')}
-                onChange={(e) => {
-                    register('userName').onChange(e);
-                    clearAiError('userName');
-                }}
+                className={inputClass}
             />
             {errors.userName && <p className="text-danger text-xs mt-1">{errors.userName.message}</p>}
           </div>
@@ -273,11 +121,7 @@ const UserFormPage: React.FC = () => {
             <input 
                 type="email" 
                 {...register('email', { required: 'El email es requerido' })} 
-                className={inputClass('email')}
-                onChange={(e) => {
-                    register('email').onChange(e);
-                    clearAiError('email');
-                }}
+                className={inputClass}
             />
             {errors.email && <p className="text-danger text-xs mt-1">{errors.email.message}</p>}
           </div>
@@ -298,12 +142,9 @@ const UserFormPage: React.FC = () => {
                 <input 
                 type="text"
                 value={cedulaNumber}
-                onChange={(e) => {
-                    setCedulaNumber(e.target.value);
-                    clearAiError('cedula');
-                }}
+                onChange={(e) => setCedulaNumber(e.target.value)}
                 placeholder="Número de Cédula"
-                className={`mt-1 block w-full px-3 py-2 bg-surface text-text-primary border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent ${aiMissingFields.has('cedula') ? 'border-danger ring-1 ring-danger' : 'border-border'}`}
+                className="mt-1 block w-full px-3 py-2 bg-surface text-text-primary border border-border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"
                 />
                 <button 
                     type="button" 
@@ -322,11 +163,7 @@ const UserFormPage: React.FC = () => {
             <label className="block text-sm font-medium text-text-primary">Teléfono</label>
             <input 
                 {...register('phoneNumber', { required: 'El teléfono es requerido' })} 
-                className={inputClass('phoneNumber')}
-                onChange={(e) => {
-                    register('phoneNumber').onChange(e);
-                    clearAiError('phoneNumber');
-                }}
+                className={inputClass}
             />
             {errors.phoneNumber && <p className="text-danger text-xs mt-1">{errors.phoneNumber.message}</p>}
           </div>
@@ -367,58 +204,6 @@ const UserFormPage: React.FC = () => {
             </button>
           </div>
         </form>
-      )}
-
-      {/* Modal for AI Extraction */}
-      {isExtractionModalOpen && (
-          <Modal isOpen={true} onClose={() => setIsExtractionModalOpen(false)} title="Autocompletar con IA">
-              <div className="text-center p-4">
-                  <p className="text-text-secondary mb-4">
-                      Sube una foto de la cédula o documento de identidad. La IA extraerá los datos y llenará el formulario.
-                  </p>
-                  
-                  {extractionError && (
-                      <div className="mb-4 p-3 bg-danger-light text-danger rounded text-sm">
-                          {extractionError}
-                      </div>
-                  )}
-
-                  <div 
-                      className={`border-2 border-dashed rounded-lg p-8 transition-colors ${isAnalyzing ? 'border-gray-300 bg-gray-50 cursor-wait' : 'border-primary/50 hover:bg-background cursor-pointer'}`}
-                      onClick={() => !isAnalyzing && fileInputRef.current?.click()}
-                  >
-                      <input 
-                          type="file" 
-                          ref={fileInputRef} 
-                          className="hidden" 
-                          accept="image/*,application/pdf"
-                          onChange={handleFileSelect}
-                          disabled={isAnalyzing}
-                      />
-                      
-                      {isAnalyzing ? (
-                          <div className="flex flex-col items-center justify-center text-primary">
-                              <SpinnerIcon className="w-10 h-10 mb-2" />
-                              <span className="font-bold">Analizando documento...</span>
-                          </div>
-                      ) : (
-                          <div className="flex flex-col items-center text-text-tertiary hover:text-primary">
-                              <CameraIcon className="w-12 h-12 mb-2" />
-                              <span>Haz clic para subir imagen</span>
-                          </div>
-                      )}
-                  </div>
-                  
-                  <div className="mt-6 flex justify-end">
-                      <button 
-                          onClick={() => setIsExtractionModalOpen(false)}
-                          className="text-text-secondary hover:text-text-primary font-medium text-sm"
-                      >
-                          Cancelar
-                      </button>
-                  </div>
-              </div>
-          </Modal>
       )}
     </div>
   );

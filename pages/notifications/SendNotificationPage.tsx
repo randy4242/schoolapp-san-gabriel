@@ -123,8 +123,9 @@ const SendNotificationPage: React.FC = () => {
         setIsImproving(true);
         try {
             const prompt = `Mejora la redacción del siguiente texto para una notificación escolar formal y clara. Mantén el mensaje original pero hazlo más profesional y amigable. Solo devuelve el texto mejorado, sin explicaciones: "${currentContent}"`;
+            // FIX: Updated model to gemini-3-flash-preview.
             const response = await geminiService.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3-flash-preview',
                 contents: [{ text: prompt }]
             });
             if (response.text) {

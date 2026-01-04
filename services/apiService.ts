@@ -1,4 +1,3 @@
-
 import { AuthenticatedUser, DashboardStats, User, Course, Teacher, Classroom, Student, ClassroomAttendanceStats, Lapso, StudentGradesVM, StudentAttendanceStats, LapsoGradeApiItem, StudentGradeItem, StudentGradesGroup, AuthResponse, Evaluation, Grade, Child, LoginHistoryRecord, Payment, Notification, ReportEmgClassroomResponse, ExtracurricularActivity, Certificate, CertificateGeneratePayload, Product, ProductWithAudiences, ProductAudience, AudiencePayload, Enrollment, ReportRrdeaClassroomResponse, Parent, UserDetails, AttendanceRecord, AttendanceEditPayload, ExtracurricularEnrollmentPayload, EnrolledStudent, ClassroomAverage, ClassroomStudentAveragesResponse, MedicalInfo, ApprovePaymentResponse, InvoicePrintVM, PendingInvoice, PaginatedInvoices, GenerateInvoicesRunDto, MonthlyGenerationResult, MonthlyARSummary, PaginatedPurchases, PurchaseCreatePayload, PurchaseDetail, PurchaseCreationResponse, PayrollRunPayload, PayrollPreviewResponse, PayrollRunResponse, PaginatedPayrolls, PayrollDetail, BaseSalaryUpdatePayload, Chat, Message, CreateGroupChatDto, SendMessageDto, PnlReportResponse, SalesByProductResponse, InventorySnapshotResponse, InventoryKardexResponse, ArAgingSummaryResponse, ArAgingByCustomerResponse, TrialBalanceRow, LedgerRow, IncomeStatement, BalanceSheet, WithholdingType, GenerateWithholdingPayload, GenerateWithholdingResponse, WithholdingListItem, WithholdingDetail, Question, QuestionOption, TakeExamEvaluation, EvaluationQnA, StudentSubmission, ExamSubmissionDetail, EvaluationContent, CreateContentDTO, AnswerPayload } from '../types';
 
 const BASE_URL = "https://siscamoruco.somee.com/";
@@ -48,6 +47,13 @@ class ApiService {
       headers: this.getHeaders(),
     });
 
+    // MODIFICACIÓN: Si es 404, asumimos que es una lista vacía o recurso no existente 
+    // pero no crítico, para evitar que la UI explote.
+    if (response.status === 404) {
+        console.warn(`API Resource not found (404): ${endpoint}. Returning empty dataset.`);
+        return [] as unknown as T;
+    }
+
     if (!response.ok) {
         const errorData = await response.text();
         console.error('API Error:', errorData);
@@ -56,7 +62,6 @@ class ApiService {
             const parsedError = JSON.parse(errorData);
             errorMessage = parsedError.message || parsedError.title || errorMessage;
         } catch (e) {
-            // If parsing fails, use the raw text if it's not too long
             errorMessage = errorData.length < 200 ? errorData : errorMessage;
         }
       throw new Error(errorMessage);
@@ -79,6 +84,8 @@ class ApiService {
       ...options,
       headers: this.getHeaders(),
     });
+
+    if (response.status === 404) return [] as unknown as T;
 
     if (!response.ok) {
         const errorData = await response.text();
@@ -117,7 +124,6 @@ class ApiService {
     return this.request<LoginHistoryRecord[]>(`api/auth/history?schoolId=${schoolId}`);
   }
 
-  // Special method for login flow that doesn't pass schoolId as it's derived from token
   async getUserDetailsById(id: number, token: string): Promise<User> {
     const response = await fetch(`${BASE_URL}api/users/${id}`, {
         headers: {
@@ -328,7 +334,10 @@ class ApiService {
   // Student specific data
   async getStudentGradesByLapso(studentId: number, studentName: string, lapsoId: number, schoolId: number): Promise<StudentGradesVM> {
     const lapsos = await this.getLapsos(schoolId);
-    const gradeItems = await this.request<LapsoGradeApiItem[]>(`api/grades/student/${studentId}/lapso/${lapsoId}?schoolId=${schoolId}`);
+    let gradeItems = await this.request<LapsoGradeApiItem[]>(`api/grades/student/${studentId}/lapso/${lapsoId}?schoolId=${schoolId}`);
+    
+    // Si es 404, el request de arriba ahora devuelve [] automáticamente.
+    if (!Array.isArray(gradeItems)) gradeItems = [];
 
     const groupsMap = new Map<string, StudentGradeItem[]>();
     
@@ -594,7 +603,6 @@ class ApiService {
   // Reports
   async getStudents(schoolId: number): Promise<User[]> {
     const users = await this.getUsers(schoolId);
-    // Role for student is 1
     return users.filter(u => u.roleID === 1);
   }
 
@@ -620,7 +628,6 @@ class ApiService {
   }
 
   async getChildrenOfParent(parentId: number, schoolId: number): Promise<Child[]> {
-    // The raw response object from the API.
     interface RawChild {
         relationID: number;
         userID: number;
@@ -628,10 +635,11 @@ class ApiService {
         email: string;
     }
     const rawChildren = await this.request<RawChild[]>(`api/relationships/user/${parentId}/children?schoolId=${schoolId}`);
+    if (!Array.isArray(rawChildren)) return [];
     return rawChildren.map(c => ({
         relationID: c.relationID,
         userID: c.userID,
-        userName: c.studentName, // map studentName to userName for frontend consistency
+        userName: c.studentName,
         email: c.email
     }));
   }
@@ -644,6 +652,7 @@ class ApiService {
         email: string;
     }
     const rawParents = await this.request<RawParent[]>(`api/relationships/user/${childId}/parents?schoolId=${schoolId}`);
+    if (!Array.isArray(rawParents)) return [];
     return rawParents.map(p => ({
         relationID: p.relationID,
         userID: p.userID,
@@ -738,9 +747,8 @@ class ApiService {
 
   // Products
   async getProductsWithAudiences(schoolId: number): Promise<ProductWithAudiences[]> {
-    // The new API for products (on santarosa) does not seem to have audiences.
-    // We will return an empty array for audiences to maintain compatibility with existing components.
     const products = await this.request<Product[]>(`api/products?schoolid=${schoolId}`);
+    if (!Array.isArray(products)) return [];
     return products.map(p => ({
         product: p,
         audiences: []
@@ -748,7 +756,6 @@ class ApiService {
   }
 
   async createProduct(payload: Omit<Product, 'productID' | 'createdAt'> & { audiences: AudiencePayload[] }): Promise<Product> {
-      // The new product API is on the purchases URL and does not seem to use audiences.
       const { audiences, ...productPayload } = payload;
       return this.request<Product>('api/products', {
           method: 'POST',
@@ -757,15 +764,12 @@ class ApiService {
   }
 
   async getProductWithAudiences(productId: number, schoolId: number): Promise<{ product: Product; audiences: AudiencePayload[] }> {
-      // The new API is on the purchases URL and does not seem to use audiences.
       const product = await this.request<Product>(`api/products/${productId}?schoolid=${schoolId}`);
       return { product, audiences: [] };
   }
 
   async updateProduct(productId: number, payload: Partial<Product> & { audiences: AudiencePayload[] }): Promise<void> {
-      // The new product API is on the purchases URL and does not seem to use audiences.
       const { audiences, ...productPayload } = payload;
-      // It's assumed payload contains schoolID, and the new API expects it in the query.
       return this.request<void>(`api/products/${productId}?schoolid=${payload.schoolID}`, {
           method: 'PUT',
           body: JSON.stringify(productPayload)
@@ -774,7 +778,8 @@ class ApiService {
 
   // Enrollments
   async getEnrollmentsForUser(userId: number, schoolId: number): Promise<Enrollment[]> {
-    return this.request<Enrollment[]>(`api/enrollments/user/${userId}?schoolId=${schoolId}`);
+    const res = await this.request<Enrollment[]>(`api/enrollments/user/${userId}?schoolId=${schoolId}`);
+    return Array.isArray(res) ? res : [];
   }
 
   async createEnrollment(payload: { UserID: number; CourseID: number; SchoolID: number }): Promise<Enrollment> {
@@ -792,7 +797,8 @@ class ApiService {
   
   // Attendance
   async getAttendanceByCourse(courseId: number, schoolId: number): Promise<AttendanceRecord[]> {
-    return this.request<AttendanceRecord[]>(`api/attendance/course/${courseId}?schoolId=${schoolId}`);
+    const res = await this.request<AttendanceRecord[]>(`api/attendance/course/${courseId}?schoolId=${schoolId}`);
+    return Array.isArray(res) ? res : [];
   }
 
   async updateAttendance(attendanceId: number, payload: AttendanceEditPayload, modifiedById: number): Promise<void> {
@@ -814,7 +820,8 @@ class ApiService {
   }
 
   async getPendingInvoices(schoolId: number): Promise<PendingInvoice[]> {
-    return this.request<PendingInvoice[]>(`api/invoices/pending?schoolId=${schoolId}`);
+    const res = await this.request<PendingInvoice[]>(`api/invoices/pending?schoolId=${schoolId}`);
+    return Array.isArray(res) ? res : [];
   }
 
   async getInvoices(schoolId: number, params: { status?: string; from?: string; to?: string; q?: string; page?: number; pageSize?: number }): Promise<PaginatedInvoices> {
@@ -843,7 +850,8 @@ class ApiService {
     const params = new URLSearchParams({ schoolId: schoolId.toString() });
     if (year) params.append('year', year.toString());
     if (currency) params.append('currency', currency);
-    return this.request<MonthlyARSummary[]>(`api/invoices/monthly-ar?${params.toString()}`);
+    const res = await this.request<MonthlyARSummary[]>(`api/invoices/monthly-ar?${params.toString()}`);
+    return Array.isArray(res) ? res : [];
   }
 
   // Purchases
@@ -930,11 +938,13 @@ class ApiService {
 
   // Chat
   async getUserChats(userId: number): Promise<Chat[]> {
-    return this.request<Chat[]>(`api/chats?userID=${userId}`);
+    const res = await this.request<Chat[]>(`api/chats?userID=${userId}`);
+    return Array.isArray(res) ? res : [];
   }
 
   async getChatMessages(chatId: number): Promise<Message[]> {
-    return this.request<Message[]>(`api/chats/${chatId}/messages`);
+    const res = await this.request<Message[]>(`api/chats/${chatId}/messages`);
+    return Array.isArray(res) ? res : [];
   }
 
   async sendMessage(payload: SendMessageDto): Promise<Message> {
@@ -1001,15 +1011,18 @@ class ApiService {
 
     // GL Reports
     async getTrialBalance(schoolId: number): Promise<TrialBalanceRow[]> {
-        return this.glRequest<TrialBalanceRow[]>(`trial-balance?schoolId=${schoolId}`);
+        const res = await this.glRequest<TrialBalanceRow[]>(`trial-balance?schoolId=${schoolId}`);
+        return Array.isArray(res) ? res : [];
     }
 
     async getLedger(schoolId: number, accountCode: string, from: string, to: string): Promise<LedgerRow[]> {
         const params = new URLSearchParams({ schoolId: schoolId.toString(), accountCode, from, to });
-        return this.glRequest<LedgerRow[]>(`ledger?${params.toString()}`);
+        const res = await this.glRequest<LedgerRow[]>(`ledger?${params.toString()}`);
+        return Array.isArray(res) ? res : [];
     }
 
     async getIncomeStatement(schoolId: number, from: string, to: string): Promise<IncomeStatement> {
+        // FIX: Defined params to resolve "Cannot find name 'params'" error.
         const params = new URLSearchParams({ schoolId: schoolId.toString(), from, to });
         return this.glRequest<IncomeStatement>(`income-statement?${params.toString()}`);
     }
@@ -1042,7 +1055,8 @@ class ApiService {
         if (params.month) query.append('month', params.month.toString());
         if (params.type) query.append('type', params.type);
         if (params.subjectRif) query.append('subjectRif', params.subjectRif);
-        return this.requestWithholding<WithholdingListItem[]>(`?${query.toString()}`);
+        const res = await this.requestWithholding<WithholdingListItem[]>(`?${query.toString()}`);
+        return Array.isArray(res) ? res : [];
     }
 
     async getWithholdingById(id: number): Promise<WithholdingDetail> {
@@ -1069,7 +1083,8 @@ class ApiService {
     }
 
     async getVirtualExamSubmissions(evaluationId: number, schoolId: number): Promise<any[]> {
-        return this.request<any[]>(`api/evaluations/${evaluationId}/submissions?schoolId=${schoolId}`);
+        const res = await this.request<any[]>(`api/evaluations/${evaluationId}/submissions?schoolId=${schoolId}`);
+        return Array.isArray(res) ? res : [];
     }
 
     async getExamSubmissionDetail(evaluationId: number, userId: number, schoolId: number): Promise<ExamSubmissionDetail> {
@@ -1078,7 +1093,8 @@ class ApiService {
 
     // Questions Management
     async getEvaluationQuestions(evaluationId: number): Promise<Question[]> {
-        return this.request<Question[]>(`api/evaluations/${evaluationId}/questions`);
+        const res = await this.request<Question[]>(`api/evaluations/${evaluationId}/questions`);
+        return Array.isArray(res) ? res : [];
     }
 
     async createEvaluationQuestion(evaluationId: number, question: Partial<Question>): Promise<Question> {
@@ -1124,7 +1140,8 @@ class ApiService {
 
     // QnA / Forums
     async getEvaluationQnA(evaluationId: number): Promise<EvaluationQnA[]> {
-        return this.request<EvaluationQnA[]>(`api/evaluations/${evaluationId}/qna`);
+        const res = await this.request<EvaluationQnA[]>(`api/evaluations/${evaluationId}/qna`);
+        return Array.isArray(res) ? res : [];
     }
 
     async createEvaluationQnA(evaluationId: number, questionText: string): Promise<void> {
@@ -1143,7 +1160,8 @@ class ApiService {
 
     // Evaluation Content (Integrated from evaluationContentService)
     async getContents(evaluationId: number): Promise<EvaluationContent[]> {
-        return this.request<EvaluationContent[]>(`api/evaluations/${evaluationId}/contents`);
+        const res = await this.request<EvaluationContent[]>(`api/evaluations/${evaluationId}/contents`);
+        return Array.isArray(res) ? res : [];
     }
 
     async createContent(evaluationId: number, data: CreateContentDTO): Promise<EvaluationContent> {

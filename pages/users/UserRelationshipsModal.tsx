@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { User, Parent, Child } from '../../types';
 import { apiService } from '../../services/apiService';
@@ -7,9 +8,10 @@ import Modal from '../../components/Modal';
 interface UserRelationshipsModalProps {
     user: User;
     onClose: () => void;
+    onSwitchUser?: (user: User) => void;
 }
 
-const UserRelationshipsModal: React.FC<UserRelationshipsModalProps> = ({ user, onClose }) => {
+const UserRelationshipsModal: React.FC<UserRelationshipsModalProps> = ({ user, onClose, onSwitchUser }) => {
     const { user: authUser } = useAuth();
     const [relationships, setRelationships] = useState<(Parent | Child)[]>([]);
     const [loading, setLoading] = useState(true);
@@ -20,6 +22,13 @@ const UserRelationshipsModal: React.FC<UserRelationshipsModalProps> = ({ user, o
     const [searchableUsers, setSearchableUsers] = useState<User[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedUserId, setSelectedUserId] = useState<string>('');
+    
+    // Modal state for confirmation (Delete or Redirect)
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        type: 'delete' | 'redirect';
+        relationUser: Parent | Child | null;
+    }>({ isOpen: false, type: 'delete', relationUser: null });
 
     const isStudent = user.roleID === 1;
     const modalTitle = isStudent ? `Padres de ${user.userName}` : `Hijos de ${user.userName}`;
@@ -67,14 +76,52 @@ const UserRelationshipsModal: React.FC<UserRelationshipsModalProps> = ({ user, o
         return searchableUsers.filter(u => u.userName.toLowerCase().includes(searchTerm.toLowerCase()));
     }, [searchableUsers, searchTerm]);
     
-    const handleDelete = async (relationId: number) => {
-        if (window.confirm('¿Estás seguro de que deseas eliminar esta relación?')) {
+    const initiateDelete = (relationUser: Parent | Child) => {
+        if (isStudent && onSwitchUser) {
+            // Cannot delete from student side, prompt redirect
+            setConfirmModal({
+                isOpen: true,
+                type: 'redirect',
+                relationUser
+            });
+        } else {
+            // Standard delete confirmation
+            setConfirmModal({
+                isOpen: true,
+                type: 'delete',
+                relationUser
+            });
+        }
+    };
+
+    const handleConfirmAction = async () => {
+        const { type, relationUser } = confirmModal;
+        if (!relationUser) return;
+
+        if (type === 'redirect') {
+            // Context Switch Logic
+            const parentUser: User = {
+                userID: relationUser.userID,
+                userName: relationUser.userName,
+                email: relationUser.email,
+                roleID: 3, // Assuming parent
+                schoolID: authUser?.schoolId || 0,
+                isBlocked: false,
+                cedula: null,
+                phoneNumber: null
+            };
+            if (onSwitchUser) onSwitchUser(parentUser);
+            setConfirmModal({ isOpen: false, type: 'delete', relationUser: null });
+        } else {
+            // Actual Delete Logic
             try {
-                await apiService.deleteRelationship(relationId);
+                await apiService.deleteRelationship(relationUser.relationID);
                 setSuccess('Relación eliminada.');
-                fetchRelationships(); // Refresh list
+                fetchRelationships();
             } catch (err: any) {
                 setError(err.message || 'Error al eliminar.');
+            } finally {
+                setConfirmModal({ isOpen: false, type: 'delete', relationUser: null });
             }
         }
     };
@@ -108,7 +155,7 @@ const UserRelationshipsModal: React.FC<UserRelationshipsModalProps> = ({ user, o
                             {relationships.map(rel => (
                                 <li key={rel.relationID} className="py-2 flex justify-between items-center">
                                     <span>{rel.userName}</span>
-                                    <button onClick={() => handleDelete(rel.relationID)} className="text-danger hover:text-danger-dark text-sm">Eliminar</button>
+                                    <button onClick={() => initiateDelete(rel)} className="text-danger hover:text-danger-dark text-sm">Eliminar</button>
                                 </li>
                             ))}
                         </ul>
@@ -148,6 +195,47 @@ const UserRelationshipsModal: React.FC<UserRelationshipsModalProps> = ({ user, o
                         <button onClick={handleAdd} disabled={!selectedUserId} className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 disabled:bg-secondary">Guardar</button>
                     </div>
                 </div>
+            )}
+
+            {/* Confirmation Modal (Nested) */}
+            {confirmModal.isOpen && (
+                <Modal 
+                    isOpen={true} 
+                    onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })} 
+                    title={confirmModal.type === 'redirect' ? 'Acción Requerida' : 'Confirmar Eliminación'}
+                >
+                    <div className="space-y-4">
+                        {confirmModal.type === 'redirect' ? (
+                            <>
+                                <p className="text-text-primary">
+                                    Para eliminar la relación de un estudiante, debe hacerse desde la Relación del Padre.
+                                </p>
+                                <p className="text-sm text-text-secondary">
+                                    ¿Desea ir a la gestión de relaciones de <strong>{confirmModal.relationUser?.userName}</strong>?
+                                </p>
+                            </>
+                        ) : (
+                            <p className="text-text-primary">
+                                ¿Estás seguro de que deseas eliminar la relación con <strong>{confirmModal.relationUser?.userName}</strong>?
+                            </p>
+                        )}
+                        
+                        <div className="flex justify-end space-x-2 pt-2">
+                            <button 
+                                onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })} 
+                                className="bg-background text-text-primary py-2 px-4 rounded hover:bg-border transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={handleConfirmAction} 
+                                className={`py-2 px-4 rounded text-text-on-primary transition-colors ${confirmModal.type === 'redirect' ? 'bg-primary hover:bg-primary/90' : 'bg-danger hover:bg-danger-dark'}`}
+                            >
+                                {confirmModal.type === 'redirect' ? 'Ir al Padre' : 'Eliminar'}
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
             )}
         </Modal>
     );
