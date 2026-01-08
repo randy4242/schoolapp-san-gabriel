@@ -272,21 +272,34 @@ const BulkUserCreationPage: React.FC = () => {
     };
 
     const generateEmailFromData = (name: string, cedulaNumber: string, domain: string): string => {
-        if (!name || !cedulaNumber) return '';
+        if (!name) return '';
         
-        // Limpiar nombre y apellidos (quitar acentos y caracteres no alfabéticos)
+        // 1. Limpiar nombre y apellidos (quitar acentos y caracteres no alfabéticos)
         const cleanStr = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/[^a-z\s]/g, '');
-        const parts = cleanStr.split(/\s+/).filter(p => p.length > 0);
         
-        const firstName = parts[0] || 'usuario';
-        const lastName = parts.length > 1 ? parts[1] : '';
+        // 2. Filtrar conectores comunes en nombres españoles: de, los, la, del, las
+        const stopWords = ['de', 'del', 'la', 'los', 'las'];
+        const parts = cleanStr.split(/\s+/).filter(p => p.length > 0 && !stopWords.includes(p));
         
-        // Obtener últimos 2 dígitos de la cédula
+        if (parts.length === 0) return `usuario@${domain.toLowerCase()}.com`;
+
+        let emailPrefix = "";
+
+        // 3. Lógica de composición basada en la cantidad de palabras restantes
+        if (parts.length === 1) {
+            emailPrefix = parts[0];
+        } else if (parts.length === 2 || parts.length === 3) {
+            emailPrefix = parts[0] + parts[1];
+        } else {
+            emailPrefix = parts[0] + parts[2];
+        }
+        
+        // 4. Obtener últimos 2 dígitos de la cédula para unicidad
         const cleanCedula = cedulaNumber.replace(/[^0-9]/g, '');
-        const lastTwoDigits = cleanCedula.length >= 2 ? cleanCedula.slice(-2) : (cleanCedula || '00');
+        const lastTwoDigits = cleanCedula.length >= 2 ? cleanCedula.slice(-2) : (cleanCedula || '');
         
-        // Construcción: nombre + apellido + 2 dígitos + @dominio.com (todo minúsculas)
-        return `${firstName}${lastName}${lastTwoDigits}@${domain.toLowerCase()}.com`.toLowerCase();
+        // 5. Construcción final
+        return `${emailPrefix}${lastTwoDigits}@${domain.toLowerCase()}.com`.toLowerCase();
     };
 
     const checkValidity = (u: Partial<ExtractedUser>): boolean => {
