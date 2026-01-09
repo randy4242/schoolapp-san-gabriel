@@ -90,9 +90,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
     {
       label: 'Evaluaciones',
       icon: <ClipboardCheckIcon />,
-      permission: (has) => has([6, 7, 8, 2, 9, 10]),
+      permission: (has) => has([6, 7, 8, 2, 9, 10, 1, 3]),
       links: [
         { to: '/evaluations', label: 'Ver Evaluaciones', icon: <span />, permission: (has) => has([6, 7, 8, 2, 9, 10]) },
+        { to: '/evaluations/plan', label: 'Plan de Evaluación', icon: <span />, permission: (has) => has([6, 7, 8, 2, 9, 10, 1, 3]) },
         { to: '/evaluations/create', label: 'Crear Evaluación', icon: <span />, permission: (has) => has([6, 2, 9, 10]) },
         { to: '/evaluations/create-bulk-ia', label: 'Crear Múltiples (IA)', icon: <span />, permission: (has) => has([6, 2, 9, 10]) },
       ].filter(l => l.permission(Is))

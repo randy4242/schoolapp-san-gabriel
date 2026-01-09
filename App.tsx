@@ -56,6 +56,7 @@ import WithholdingListPage from './pages/withholdings/WithholdingListPage';
 import WithholdingFormPage from './pages/withholdings/WithholdingFormPage';
 import BoletaListPage from './pages/boletas/BoletaListPage';
 import BoletaFormPage from './pages/boletas/BoletaFormPage';
+import PlanEvaluacionPage from './pages/evaluations/PlanEvaluacionPage';
 
 // Virtual Classroom Pages
 import MyCoursesPage from './pages/virtual/MyCoursesPage';
@@ -123,6 +124,7 @@ const App: React.FC = () => {
 
             {/* Evaluations */}
             <Route path="evaluations" element={<EvaluationListPage />} />
+            <Route path="evaluations/plan" element={<PlanEvaluacionPage />} />
             <Route path="evaluations/create" element={<EvaluationFormPage />} />
             <Route path="evaluations/create-bulk-ia" element={<BulkEvaluationCreationPage />} />
             <Route path="evaluations/edit/:id" element={<EvaluationFormPage />} />

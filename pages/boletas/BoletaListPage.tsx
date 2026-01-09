@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { apiService } from '../../services/apiService';
@@ -59,12 +58,12 @@ const BoletaListPage: React.FC = () => {
     // Refs for scrolling
     const highlightRef = useRef<HTMLTableRowElement>(null);
 
-    // MODIFICACIÓN: Incluir Rol 1 en permisos
-    const canManage = useMemo(() => hasPermission([6, 7, 2, 9, 10, 3, 1]), [hasPermission]);
+    // View permissions
+    const canManage = useMemo(() => hasPermission([6, 7, 2, 9, 10, 3]), [hasPermission]);
+    // Edit permissions (Parents excluded)
     const canEdit = useMemo(() => hasPermission([6, 7, 2, 9, 10]), [hasPermission]);
     const isSuperAdmin = useMemo(() => hasPermission([6, 7]), [hasPermission]);
-    const isParent = hasPermission([3]);
-    const isStudent = hasPermission([1]);
+    const isParent = useMemo(() => hasPermission([3]), [hasPermission]);
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
@@ -107,18 +106,6 @@ const BoletaListPage: React.FC = () => {
                             cedula: null,
                             phoneNumber: null
                         }));
-                    } else if (isStudent) {
-                        // MODIFICACIÓN: Si es estudiante, el único estudiante relevante es él mismo
-                        studentData = [{
-                            userID: user.userId,
-                            userName: user.userName,
-                            email: user.email,
-                            roleID: 1,
-                            schoolID: user.schoolId,
-                            isBlocked: false,
-                            cedula: null,
-                            phoneNumber: null
-                        }];
                     } else {
                         studentData = await apiService.getStudents(user.schoolId);
                     }
@@ -147,7 +134,7 @@ const BoletaListPage: React.FC = () => {
     useEffect(() => {
         fetchData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user, isParent, isStudent]);
+    }, [user, isParent]);
 
     const studentMap = useMemo(() => {
         return new Map(students.map(s => [s.userID, s.userName]));
@@ -337,12 +324,9 @@ const BoletaListPage: React.FC = () => {
         return certificates.filter(c => {
             const status = getStatus(c.content);
 
-            // MODIFICACIÓN: Regla para padres y estudiantes (solo ver aprobadas y solo las suyas)
-            if (isParent || isStudent) {
+            // 1. Parent Filtering
+            if (isParent) {
                 if (status !== 'Approved') return false;
-                if (isStudent && c.userId !== user?.userId) return false;
-                // Para padres se filtra automáticamente porque 'students' ya contiene solo a sus hijos
-                if (isParent && !studentMap.has(c.userId)) return false;
             }
 
             // 2. Teacher View Logic
@@ -355,11 +339,11 @@ const BoletaListPage: React.FC = () => {
                 }
             } catch (e) {}
 
-            if (!isSuperAdmin && !isParent && !isStudent && user && createdBy !== user.userId) {
+            if (!isSuperAdmin && !isParent && user && createdBy !== user.userId) {
                 if (createdBy) return false; 
             }
 
-            // 3. Status Filter
+            // 3. Status Filter (New)
             if (statusFilter && status !== statusFilter) {
                 return false;
             }
@@ -394,7 +378,7 @@ const BoletaListPage: React.FC = () => {
 
             return nameMatch && salonMatch && sectionMatch;
         });
-    }, [certificates, searchTerm, salonFilter, sectionFilter, statusFilter, studentMap, studentClassroomMap, isSuperAdmin, isParent, isStudent, user, highlightId]);
+    }, [certificates, searchTerm, salonFilter, sectionFilter, statusFilter, studentMap, studentClassroomMap, isSuperAdmin, isParent, user, highlightId]);
 
     if (!canManage) {
         return <p className="text-danger p-4">No tienes permisos para ver esta sección.</p>;
@@ -426,52 +410,52 @@ const BoletaListPage: React.FC = () => {
                 </div>
             )}
 
-            {/* MODIFICACIÓN: Ocultar filtros complejos para estudiantes */}
-            {!isStudent && (
-                <div className="flex flex-col md:flex-row gap-4 mb-4">
-                    <input
-                        type="text"
-                        placeholder="Buscar por nombre..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        disabled={!!highlightId}
-                        className="w-full md:w-1/4 p-2 border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:bg-background disabled:opacity-50"
-                    />
-                    
-                    <select
-                        value={salonFilter}
-                        onChange={e => setSalonFilter(e.target.value)}
-                        disabled={!!highlightId}
-                        className="w-full md:w-1/4 p-2 border border-border rounded bg-surface focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:bg-background disabled:opacity-50"
-                    >
-                        <option value="">Nivel: Todos</option>
-                        {uniqueSalons.map(salon => (
-                            <option key={salon} value={salon}>{salon}</option>
-                        ))}
-                    </select>
+            <div className="flex flex-col md:flex-row gap-4 mb-4">
+                <input
+                    type="text"
+                    placeholder="Buscar por nombre..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    disabled={!!highlightId}
+                    className="w-full md:w-1/4 p-2 border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:bg-background disabled:opacity-50"
+                />
+                
+                {/* Salon / Nivel Filter */}
+                <select
+                    value={salonFilter}
+                    onChange={e => setSalonFilter(e.target.value)}
+                    disabled={!!highlightId}
+                    className="w-full md:w-1/4 p-2 border border-border rounded bg-surface focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:bg-background disabled:opacity-50"
+                >
+                    <option value="">Nivel: Todos</option>
+                    {uniqueSalons.map(salon => (
+                        <option key={salon} value={salon}>{salon}</option>
+                    ))}
+                </select>
 
-                    <input
-                        type="text"
-                        placeholder="Sección/Letra (ej: A)"
-                        value={sectionFilter}
-                        onChange={e => setSectionFilter(e.target.value)}
-                        disabled={!!highlightId}
-                        className="w-full md:w-1/4 p-2 border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:bg-background disabled:opacity-50"
-                    />
+                {/* Section / Letter Filter */}
+                <input
+                    type="text"
+                    placeholder="Sección/Letra (ej: A)"
+                    value={sectionFilter}
+                    onChange={e => setSectionFilter(e.target.value)}
+                    disabled={!!highlightId}
+                    className="w-full md:w-1/4 p-2 border border-border rounded focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:bg-background disabled:opacity-50"
+                />
 
-                    <select
-                        value={statusFilter}
-                        onChange={e => setStatusFilter(e.target.value)}
-                        disabled={!!highlightId}
-                        className="w-full md:w-1/4 p-2 border border-border rounded bg-surface focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:bg-background disabled:opacity-50"
-                    >
-                        <option value="">Estado: Todas</option>
-                        <option value="Pending">Pendiente</option>
-                        <option value="Approved">Aprobada</option>
-                        <option value="Rejected">Rechazada</option>
-                    </select>
-                </div>
-            )}
+                {/* Status Filter */}
+                <select
+                    value={statusFilter}
+                    onChange={e => setStatusFilter(e.target.value)}
+                    disabled={!!highlightId}
+                    className="w-full md:w-1/4 p-2 border border-border rounded bg-surface focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:bg-background disabled:opacity-50"
+                >
+                    <option value="">Estado: Todas</option>
+                    <option value="Pending">Pendiente</option>
+                    <option value="Approved">Aprobada</option>
+                    <option value="Rejected">Rechazada</option>
+                </select>
+            </div>
 
             {loading && <p>Cargando boletas...</p>}
             {error && <p className="text-danger bg-danger-light p-3 rounded mb-4">{error}</p>}
@@ -485,7 +469,7 @@ const BoletaListPage: React.FC = () => {
                                     <th className="px-4 py-2 text-left font-medium text-text-on-primary uppercase">Estudiante</th>
                                     <th className="px-4 py-2 text-left font-medium text-text-on-primary uppercase">Fecha</th>
                                     <th className="px-4 py-2 text-left font-medium text-text-on-primary uppercase">Nivel</th>
-                                    {!isStudent && <th className="px-4 py-2 text-left font-medium text-text-on-primary uppercase">Sección</th>}
+                                    <th className="px-4 py-2 text-left font-medium text-text-on-primary uppercase">Sección</th>
                                     <th className="px-4 py-2 text-left font-medium text-text-on-primary uppercase">Estado</th>
                                     <th className="px-4 py-2 text-left font-medium text-text-on-primary uppercase w-1">Acciones</th>
                                 </tr>
@@ -524,7 +508,7 @@ const BoletaListPage: React.FC = () => {
                                             <td className="px-4 py-2 whitespace-nowrap font-medium text-text-primary">{studentName}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-secondary text-xs">{formatDate(cert.issueDate)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-secondary text-xs">{level}</td>
-                                            {!isStudent && <td className="px-4 py-2 whitespace-nowrap text-secondary text-xs">{currentSection}</td>}
+                                            <td className="px-4 py-2 whitespace-nowrap text-secondary text-xs">{currentSection}</td>
                                             <td className="px-4 py-2 whitespace-nowrap">
                                                 {statusBadge}
                                             </td>

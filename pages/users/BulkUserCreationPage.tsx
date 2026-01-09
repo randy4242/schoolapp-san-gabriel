@@ -287,10 +287,14 @@ const BulkUserCreationPage: React.FC = () => {
 
         // 3. Lógica de composición basada en la cantidad de palabras restantes
         if (parts.length === 1) {
+            // Caso raro: solo una palabra
             emailPrefix = parts[0];
         } else if (parts.length === 2 || parts.length === 3) {
+            // Juan Godoy Hernandez -> juangodoy
+            // Randy Carrasco -> randycarrasco
             emailPrefix = parts[0] + parts[1];
         } else {
+            // 4 o más palabras: Randy Daniel Godoy Carrasco -> randygodoy (parts[0] + parts[2])
             emailPrefix = parts[0] + parts[2];
         }
         
