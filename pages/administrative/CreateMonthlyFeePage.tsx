@@ -88,7 +88,7 @@ const CreateMonthlyFeePage: React.FC = () => {
         setIsLoadingParents(true);
         try {
             // Load parents
-            const parentsResp = await fetch(`https://siscamoruco.somee.com/api/users?schoolId=${user?.schoolId}`, {
+            const parentsResp = await fetch(`https://santarosasis.somee.com/api/users?schoolId=${user?.schoolId}`, {
                 headers: { 'Authorization': `Bearer ${user.token}` }
             });
             if (!parentsResp.ok) throw new Error('Error al cargar padres');
@@ -183,7 +183,7 @@ const CreateMonthlyFeePage: React.FC = () => {
                 schoolID: user.schoolId
             };
 
-            const response = await fetch(`https://siscamoruco.somee.com/api/products/generate-monthly-fee`, {
+            const response = await fetch(`https://santarosasis.somee.com/api/products/generate-monthly-fee`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
