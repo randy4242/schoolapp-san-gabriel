@@ -48,7 +48,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
     {
       label: 'Aula Virtual',
       icon: <BeakerIcon />,
-      permission: (has) => has([1, 2, 3, 6, 7, 8, 9, 10, 11]), 
+      permission: (has) => has([1, 2, 3, 6, 7, 8, 9, 10, 11]),
       links: [
         { to: '/virtual/my-courses', label: 'Mis Cursos', icon: <span />, permission: (has) => has([1, 2, 3, 6, 7, 8, 9, 10, 11]) },
         { to: '/virtual/evaluations', label: 'Mis Evaluaciones', icon: <span />, permission: (has) => has([1, 3, 11, 6, 7]) },
@@ -93,7 +93,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       permission: (has) => has([6, 7, 8, 2, 9, 10, 1, 3]),
       links: [
         { to: '/evaluations', label: 'Ver Evaluaciones', icon: <span />, permission: (has) => has([6, 7, 8, 2, 9, 10]) },
-        { to: '/evaluations/plan', label: 'Plan de Evaluación', icon: <span />, permission: (has) => has([6, 7, 8, 2, 9, 10, 1, 3]) },
+        { to: '/evaluations/plan', label: 'Plan de Contenido', icon: <span />, permission: (has) => has([6, 7, 8, 2, 9, 10, 1, 3]) },
         { to: '/evaluations/create', label: 'Crear Evaluación', icon: <span />, permission: (has) => has([6, 2, 9, 10]) },
         { to: '/evaluations/create-bulk-ia', label: 'Crear Múltiples (IA)', icon: <span />, permission: (has) => has([6, 2, 9, 10]) },
       ].filter(l => l.permission(Is))
@@ -127,6 +127,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
         { to: '/purchases', label: 'Compras', icon: <ShoppingCartIcon />, permission: (has) => has([6, 7]) },
         { to: '/payroll', label: 'Nómina', icon: <BriefcaseIcon />, permission: (has) => has([6, 7]) },
         { to: '/withholdings', label: 'Retenciones', icon: <PercentageIcon />, permission: (has) => has([6, 7]) },
+        { to: '/administrative/create-monthly-fee', label: 'Generar Mensualidad', icon: <CalendarIcon />, permission: (has) => has([6, 7]) },
         { to: '/administrative/monthly-generation', label: 'Generación Mensual', icon: <CalendarIcon />, permission: (has) => has([6, 7]) },
       ].filter(l => l.permission(Is))
     },
@@ -140,22 +141,22 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       ].filter(l => l.permission(Is))
     },
   ];
-  
+
   const singleLinks: (NavLink & { permission: (has: (roles: number[]) => boolean) => boolean })[] = [
-      { to: '/lapsos', label: lapsoLabel, icon: <CalendarIcon />, permission: (has) => has([6]) },
-      { to: '/courses', label: 'Horario', icon: <HistoryIcon />, permission: (has) => has([2, 9, 10]) && !has([6, 7]) },
-      { to: '/attendance', label: 'Asistencia', icon: <ClipboardListIcon />, permission: (has) => has([6, 2, 9, 10]) },
-      { to: '/relationships', label: 'Relaciones', icon: <LinkIcon />, permission: (has) => has([6]) },
-      { to: '/enrollments', label: 'Inscripciones', icon: <UserCheckIcon />, permission: (has) => has([6]) },
-      { to: '/certificates', label: 'Constancias', icon: <DocumentTextIcon />, permission: (has) => has([6]) },
-      { to: '/products', label: 'Productos', icon: <CreditCardIcon />, permission: (has) => has([6]) },
-      { to: '/notifications/send', label: 'Enviar Notificaciones', icon: <BellIcon />, permission: (has) => has([6, 2, 9, 10]) },
-      { to: '/reports', label: 'Reportes', icon: <DocumentReportIcon />, permission: (has) => has([6]) },
-      { to: '/stats/grades', label: 'Estadísticas de Notas', icon: <ChartBarIcon />, permission: (has) => has([6, 7]) },
-      { to: '/analytics', label: 'Análisis y Reportes', icon: <TrendingUpIcon />, permission: (has) => has([6, 7]) },
-      { to: '/login-history', label: 'Historial de Logins', icon: <HistoryIcon />, permission: (has) => has([6]) },
+    { to: '/lapsos', label: lapsoLabel, icon: <CalendarIcon />, permission: (has) => has([6]) },
+    { to: '/courses', label: 'Horario', icon: <HistoryIcon />, permission: (has) => has([2, 9, 10]) && !has([6, 7]) },
+    { to: '/attendance', label: 'Asistencia', icon: <ClipboardListIcon />, permission: (has) => has([6, 2, 9, 10]) },
+    { to: '/relationships', label: 'Relaciones', icon: <LinkIcon />, permission: (has) => has([6]) },
+    { to: '/enrollments', label: 'Inscripciones', icon: <UserCheckIcon />, permission: (has) => has([6]) },
+    { to: '/certificates', label: 'Constancias', icon: <DocumentTextIcon />, permission: (has) => has([6]) },
+    { to: '/products', label: 'Productos', icon: <CreditCardIcon />, permission: (has) => has([6]) },
+    { to: '/notifications/send', label: 'Enviar Notificaciones', icon: <BellIcon />, permission: (has) => has([6, 2, 9, 10]) },
+    { to: '/reports', label: 'Reportes', icon: <DocumentReportIcon />, permission: (has) => has([6]) },
+    { to: '/stats/grades', label: 'Estadísticas de Notas', icon: <ChartBarIcon />, permission: (has) => has([6, 7]) },
+    { to: '/analytics', label: 'Análisis y Reportes', icon: <TrendingUpIcon />, permission: (has) => has([6, 7]) },
+    { to: '/login-history', label: 'Historial de Logins', icon: <HistoryIcon />, permission: (has) => has([6]) },
   ];
-  
+
   useEffect(() => {
     const currentOpenSections: Record<string, boolean> = {};
     navSections.forEach(section => {
@@ -164,7 +165,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       }
     });
     setOpenSections(currentOpenSections);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
   const toggleSection = (label: string) => {
@@ -181,7 +182,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 
   return (
     <>
-      <div 
+      <div
         className={`fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity md:hidden ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setIsOpen(false)}
         aria-hidden="true"
@@ -221,13 +222,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
           ))}
 
           {singleLinks.filter(l => l.permission(Is)).map(link => (
-             <div key={link.to}>
-             <Link to={link.to} className="flex items-center px-4 py-2 text-sidebar-text hover:bg-sidebar-bgHover rounded-md">
-               {link.icon}
-               <span className="ml-3">{link.label}</span>
-             </Link>
-             <hr className="border-sidebar-border my-2" />
-           </div>
+            <div key={link.to}>
+              <Link to={link.to} className="flex items-center px-4 py-2 text-sidebar-text hover:bg-sidebar-bgHover rounded-md">
+                {link.icon}
+                <span className="ml-3">{link.label}</span>
+              </Link>
+              <hr className="border-sidebar-border my-2" />
+            </div>
           ))}
         </nav>
         <div className="p-4 border-t border-sidebar-border flex-shrink-0">

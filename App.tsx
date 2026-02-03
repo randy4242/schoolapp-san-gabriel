@@ -44,6 +44,7 @@ import InvoicePrintPage from './pages/invoices/InvoicePrintPage';
 import CuentasPorCobrarPage from './pages/administrative/CuentasPorCobrarPage';
 import InvoicesListPage from './pages/administrative/InvoicesListPage';
 import MonthlyGenerationPage from './pages/administrative/MonthlyGenerationPage';
+import CreateMonthlyFeePage from './pages/administrative/CreateMonthlyFeePage';
 import PurchaseListPage from './pages/administrative/PurchaseListPage';
 import PurchaseFormPage from './pages/administrative/PurchaseFormPage';
 import PayrollListPage from './pages/administrative/PayrollListPage';
@@ -91,7 +92,7 @@ const App: React.FC = () => {
       <NotificationProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route 
+          <Route
             path="/*"
             element={
               user ? (
@@ -104,7 +105,7 @@ const App: React.FC = () => {
             }
           >
             <Route path="dashboard" element={<DashboardPage />} />
-            
+
             {/* Users */}
             <Route path="users" element={<UserListPage />} />
             <Route path="users/create" element={<UserFormPage />} />
@@ -132,7 +133,7 @@ const App: React.FC = () => {
             <Route path="evaluations/assign-descriptive/:evaluationId" element={<AssignDescriptiveGradesPage />} />
             <Route path="evaluations/evaluate-ai/:evaluationId" element={<AiEvaluationPage />} />
             <Route path="evaluations/submissions" element={<SubmissionsListPage />} />
-            
+
             {/* Virtual Classroom */}
             <Route path="virtual/my-courses" element={<MyCoursesPage />} />
             <Route path="virtual/evaluations" element={<MyEvaluationsPage />} />
@@ -144,7 +145,7 @@ const App: React.FC = () => {
             {/* Notifications */}
             <Route path="notifications/send" element={<SendNotificationPage />} />
             <Route path="notifications/list" element={<NotificationListPage />} />
-            
+
             {/* Reports */}
             <Route path="reports" element={<ReportPage />} />
             <Route path="report-viewer" element={<ReportViewerPage />} />
@@ -157,7 +158,7 @@ const App: React.FC = () => {
             <Route path="lapsos" element={<LapsoListPage />} />
             <Route path="lapsos/create" element={<LapsoFormPage />} />
             <Route path="lapsos/edit/:id" element={<LapsoFormPage />} />
-            
+
             {/* Auth */}
             <Route path="login-history" element={<LoginHistoryPage />} />
 
@@ -165,11 +166,11 @@ const App: React.FC = () => {
             <Route path="extracurriculars" element={<ExtracurricularListPage />} />
             <Route path="extracurriculars/create" element={<ExtracurricularFormPage />} />
             <Route path="extracurriculars/edit/:id" element={<ExtracurricularFormPage />} />
-            
+
             {/* Certificates */}
             <Route path="certificates" element={<CertificateListPage />} />
             <Route path="certificates/generate" element={<CertificateFormPage />} />
-            
+
             {/* Boletas */}
             <Route path="boletas" element={<BoletaListPage />} />
             <Route path="boletas/create" element={<BoletaFormPage />} />
@@ -198,6 +199,7 @@ const App: React.FC = () => {
             <Route path="cxc" element={<CuentasPorCobrarPage />} />
             <Route path="invoices" element={<InvoicesListPage />} />
             <Route path="administrative/monthly-generation" element={<MonthlyGenerationPage />} />
+            <Route path="administrative/create-monthly-fee" element={<CreateMonthlyFeePage />} />
             <Route path="purchases" element={<PurchaseListPage />} />
             <Route path="purchases/create" element={<PurchaseFormPage />} />
             <Route path="payroll" element={<PayrollListPage />} />
@@ -206,11 +208,11 @@ const App: React.FC = () => {
             <Route path="withholdings" element={<WithholdingListPage />} />
             <Route path="withholdings/create" element={<WithholdingFormPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
-            
+
             {/* GL */}
             <Route path="gl/postings" element={<GLPostingPage />} />
             <Route path="gl/reports" element={<GeneralLedgerPage />} />
-            
+
             {/* Profile */}
             <Route path="profile" element={<ProfilePage />} />
 

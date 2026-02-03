@@ -1,9 +1,11 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
 import { Course, AttendanceRecord } from '../../types';
 import EditAttendanceModal from './EditAttendanceModal';
-import { ClipboardListIcon } from '../../components/icons';
+import TakeAttendanceModal from './TakeAttendanceModal';
+import { ClipboardListIcon, PlusIcon } from '../../components/icons';
 
 const AttendanceListPage: React.FC = () => {
     const [courses, setCourses] = useState<Course[]>([]);
@@ -14,6 +16,9 @@ const AttendanceListPage: React.FC = () => {
     const [error, setError] = useState('');
     const [recordToEdit, setRecordToEdit] = useState<AttendanceRecord | null>(null);
     const [dateFilter, setDateFilter] = useState<string>('');
+    
+    // Nuevo estado para el modal de pasar asistencia
+    const [isTakingAttendance, setIsTakingAttendance] = useState(false);
 
     const { user } = useAuth();
 
@@ -94,13 +99,16 @@ const AttendanceListPage: React.FC = () => {
         if (!dateFilter) {
             return attendanceRecords;
         }
-        const filterDateStr = new Date(dateFilter).toDateString();
-    
         return attendanceRecords.filter(record => {
-            const recordDateStr = new Date(record.date).toDateString();
-            return recordDateStr === filterDateStr;
+            const recordDatePart = record.date.split('T')[0];
+            return recordDatePart === dateFilter;
         });
     }, [attendanceRecords, dateFilter]);
+
+    // Buscar nombre del curso seleccionado para el título del modal
+    const selectedCourseName = useMemo(() => {
+        return courses.find(c => c.courseID.toString() === selectedCourseId)?.name || '';
+    }, [courses, selectedCourseId]);
 
     return (
         <div>
@@ -109,8 +117,8 @@ const AttendanceListPage: React.FC = () => {
                 <h1 className="text-2xl font-bold text-text-primary ml-2">Gestión de Asistencia</h1>
             </div>
 
-            <div className="mb-6 p-4 bg-surface rounded-lg shadow-sm border flex flex-col md:flex-row gap-4">
-                <div className="flex-1">
+            <div className="mb-6 p-4 bg-surface rounded-lg shadow-sm border flex flex-col md:flex-row gap-4 items-end">
+                <div className="flex-1 w-full">
                     <label htmlFor="course-select" className="block text-sm font-medium text-text-primary mb-2">
                         Seleccione un curso
                     </label>
@@ -127,7 +135,7 @@ const AttendanceListPage: React.FC = () => {
                         ))}
                     </select>
                 </div>
-                 <div className="flex-1">
+                 <div className="flex-1 w-full">
                     <label htmlFor="date-filter" className="block text-sm font-medium text-text-primary mb-2">
                         Filtrar por Día
                     </label>
@@ -138,6 +146,18 @@ const AttendanceListPage: React.FC = () => {
                         onChange={(e) => setDateFilter(e.target.value)}
                         className="w-full p-2 border border-border rounded bg-surface focus:outline-none focus:ring-2 focus:ring-accent/50"
                     />
+                </div>
+                
+                {/* Botón Pasar Asistencia */}
+                <div className="w-full md:w-auto">
+                    <button 
+                        onClick={() => setIsTakingAttendance(true)}
+                        disabled={!selectedCourseId}
+                        className="w-full md:w-auto bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-90 disabled:bg-secondary disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                    >
+                        <PlusIcon className="w-5 h-5" />
+                        Pasar Asistencia
+                    </button>
                 </div>
             </div>
             
@@ -161,7 +181,7 @@ const AttendanceListPage: React.FC = () => {
                             {filteredRecords.map((record) => (
                                 <tr key={record.attendanceID} className="hover:bg-background">
                                     <td className="px-6 py-4 whitespace-nowrap">{record.studentName}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap">{new Date(record.date).toLocaleDateString('es-ES')}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">{new Date(record.date).toLocaleString('es-ES')}</td>
                                     <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(record.status, record.isJustified)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap max-w-sm truncate">{record.notes || '—'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
@@ -185,7 +205,19 @@ const AttendanceListPage: React.FC = () => {
                     onClose={() => setRecordToEdit(null)}
                     onSaveSuccess={() => {
                         setRecordToEdit(null);
-                        fetchRecords(selectedCourseId); // Refresh data
+                        fetchRecords(selectedCourseId);
+                    }}
+                />
+            )}
+
+            {isTakingAttendance && selectedCourseId && (
+                <TakeAttendanceModal
+                    courseId={parseInt(selectedCourseId)}
+                    courseName={selectedCourseName}
+                    onClose={() => setIsTakingAttendance(false)}
+                    onSaveSuccess={() => {
+                        setIsTakingAttendance(false);
+                        fetchRecords(selectedCourseId);
                     }}
                 />
             )}

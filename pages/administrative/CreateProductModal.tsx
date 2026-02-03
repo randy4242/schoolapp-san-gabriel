@@ -36,7 +36,7 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ onClose, onProd
                 ...data,
                 schoolID: user.schoolId,
                 isActive: true,
-                audiences: [{ targetType: "All", targetID: null }]
+                audiences: [{ targetType: "All" as const, targetID: null }]
             };
             const newProduct = await apiService.createProduct(payload);
             onProductCreated(newProduct);

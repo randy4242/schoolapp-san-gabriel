@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // FIX: Using the mandated initialization for GoogleGenAI with process.env.API_KEY.
+    // FIX: Must use named parameter for apiKey.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     if (!process.env.API_KEY) {
@@ -27,15 +27,14 @@ export default async function handler(req, res) {
 
     const { model, contents, config } = req.body;
     
-    // FIX: Calling ai.models.generateContent directly as per text generation guidelines.
-    // Updated default model to gemini-3-flash-preview.
+    // FIX: Using gemini-3-flash-preview as the standard model.
+    // FIX: Access response via .text property.
     const result = await ai.models.generateContent({
       model: model || "gemini-3-flash-preview",
       contents,
       config
     });
 
-    // FIX: Accessing result.text property directly as per guidelines.
     return res.status(200).json({ text: result.text });
 
   } catch (error) {

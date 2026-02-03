@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Type } from "@google/genai";
@@ -6,7 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { apiService } from '../../services/apiService';
 import { geminiService } from '../../services/geminiService';
 import { ROLES, User } from '../../types';
-import { SpinnerIcon, UserCheckIcon, XIcon, BlockIcon, PlusIcon, PencilAltIcon, TrashIcon } from '../../components/icons';
+import { SpinnerIcon, UserCheckIcon, XIcon, BlockIcon, PlusIcon, PencilAltIcon, TrashIcon, MaleIcon, FemaleIcon } from '../../components/icons';
 
 // --- TYPES ---
 
@@ -20,13 +21,14 @@ interface ExtractedUser {
     email: string;
     phoneNumber: string;
     roleID: number;
+    sexo: 'M' | 'F' | null;
     isValid: boolean;
     creationError?: string;
     isEmailManuallyEdited: boolean;
     duplicateReason?: string;
     status: UserStatus;
     isBeingEdited?: boolean;
-    criticalChange?: boolean; // Rastro de si se editó cédula o correo
+    criticalChange?: boolean; 
 }
 
 const CEDULA_PREFIXES = ['V', 'E', 'J', 'P', 'G', 'M'];
@@ -138,17 +140,28 @@ const UserCard: React.FC<{
                         />
                     </div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-2">
                     <div>
-                        <label className="block text-[10px] font-bold text-text-secondary uppercase">Teléfono</label>
-                        <input 
-                            type="text" 
-                            value={u.phoneNumber} 
-                            onChange={(e) => onChange(u.id, 'phoneNumber', e.target.value)}
-                            onBlur={() => onBlur(u.id)}
-                            className="w-full p-1 bg-transparent border-b border-border focus:border-accent focus:outline-none text-text-primary text-sm"
-                            placeholder="Opcional"
-                        />
+                        <label className="block text-[10px] font-bold text-text-secondary uppercase">Sexo</label>
+                        <div className="flex items-center gap-2 mt-1">
+                            <button 
+                                type="button"
+                                onClick={() => onChange(u.id, 'sexo', 'M')}
+                                className={`p-1 rounded-md transition-colors ${u.sexo === 'M' ? 'bg-info text-white shadow-sm' : 'bg-background text-text-tertiary hover:bg-gray-200'}`}
+                                title="Masculino"
+                            >
+                                <MaleIcon className="w-4 h-4" />
+                            </button>
+                            <button 
+                                type="button"
+                                onClick={() => onChange(u.id, 'sexo', 'F')}
+                                className={`p-1 rounded-md transition-colors ${u.sexo === 'F' ? 'bg-pink-500 text-white shadow-sm' : 'bg-background text-text-tertiary hover:bg-gray-200'}`}
+                                title="Femenino"
+                            >
+                                <FemaleIcon className="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
                     <div>
                         <label className="block text-[10px] font-bold text-text-secondary uppercase">Rol</label>
@@ -162,6 +175,20 @@ const UserCard: React.FC<{
                                 <option key={r.id} value={r.id}>{r.name}</option>
                             ))}
                         </select>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2">
+                    <div>
+                        <label className="block text-[10px] font-bold text-text-secondary uppercase">Teléfono</label>
+                        <input 
+                            type="text" 
+                            value={u.phoneNumber} 
+                            onChange={(e) => onChange(u.id, 'phoneNumber', e.target.value)}
+                            onBlur={() => onBlur(u.id)}
+                            className="w-full p-1 bg-transparent border-b border-border focus:border-accent focus:outline-none text-text-primary text-sm"
+                            placeholder="Opcional"
+                        />
                     </div>
                 </div>
                 <div>
@@ -273,41 +300,21 @@ const BulkUserCreationPage: React.FC = () => {
 
     const generateEmailFromData = (name: string, cedulaNumber: string, domain: string): string => {
         if (!name) return '';
-        
-        // 1. Limpiar nombre y apellidos (quitar acentos y caracteres no alfabéticos)
         const cleanStr = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/[^a-z\s]/g, '');
-        
-        // 2. Filtrar conectores comunes en nombres españoles: de, los, la, del, las
         const stopWords = ['de', 'del', 'la', 'los', 'las'];
         const parts = cleanStr.split(/\s+/).filter(p => p.length > 0 && !stopWords.includes(p));
-        
         if (parts.length === 0) return `usuario@${domain.toLowerCase()}.com`;
-
         let emailPrefix = "";
-
-        // 3. Lógica de composición basada en la cantidad de palabras restantes
-        if (parts.length === 1) {
-            // Caso raro: solo una palabra
-            emailPrefix = parts[0];
-        } else if (parts.length === 2 || parts.length === 3) {
-            // Juan Godoy Hernandez -> juangodoy
-            // Randy Carrasco -> randycarrasco
-            emailPrefix = parts[0] + parts[1];
-        } else {
-            // 4 o más palabras: Randy Daniel Godoy Carrasco -> randygodoy (parts[0] + parts[2])
-            emailPrefix = parts[0] + parts[2];
-        }
-        
-        // 4. Obtener últimos 2 dígitos de la cédula para unicidad
+        if (parts.length === 1) emailPrefix = parts[0];
+        else if (parts.length === 2 || parts.length === 3) emailPrefix = parts[0] + parts[1];
+        else emailPrefix = parts[0] + parts[2];
         const cleanCedula = cedulaNumber.replace(/[^0-9]/g, '');
         const lastTwoDigits = cleanCedula.length >= 2 ? cleanCedula.slice(-2) : (cleanCedula || '');
-        
-        // 5. Construcción final
         return `${emailPrefix}${lastTwoDigits}@${domain.toLowerCase()}.com`.toLowerCase();
     };
 
     const checkValidity = (u: Partial<ExtractedUser>): boolean => {
-        return !!((u.userName || '').trim() && (u.cedulaNumber || '').trim() && (u.email || '').trim());
+        return !!((u.userName || '').trim() && (u.cedulaNumber || '').trim() && (u.email || '').trim() && u.sexo);
     };
 
     const checkForDuplicates = (number: string, email: string): { isDuplicate: boolean, reason?: string } => {
@@ -370,8 +377,6 @@ const BulkUserCreationPage: React.FC = () => {
             });
 
             const rawUsers = JSON.parse(response.text || '[]');
-            
-            // Sanitizador para evitar strings "null" de la IA
             const sanitize = (val: any) => (val === null || val === undefined || String(val).toLowerCase() === 'null') ? '' : String(val).trim();
 
             const processed = rawUsers.map((u: any, index: number) => {
@@ -390,7 +395,6 @@ const BulkUserCreationPage: React.FC = () => {
                 }
                 
                 const dupCheck = checkForDuplicates(number, email);
-                // Mapeo básico de roles
                 const roleID = sRole.includes('profesor') ? 2 : sRole.includes('padre') || sRole.includes('representante') ? 3 : 1;
 
                 const userObj: ExtractedUser = {
@@ -401,6 +405,7 @@ const BulkUserCreationPage: React.FC = () => {
                     email,
                     phoneNumber: sPhone,
                     roleID,
+                    sexo: null, // IA no predice, usuario elige manualmente
                     isValid: false,
                     isEmailManuallyEdited,
                     duplicateReason: dupCheck.reason,
@@ -429,22 +434,12 @@ const BulkUserCreationPage: React.FC = () => {
     const handleUserChange = (id: number, field: keyof ExtractedUser, value: any) => {
         setExtractedUsers(prev => prev.map(u => {
             if (u.id !== id) return u;
-            
-            // Mantener todos los campos actuales por defecto (mantenimiento de integridad)
             let updated = { ...u, [field]: value, isBeingEdited: true };
-            
-            // Verificación selectiva: solo cambios en cédula o email marcan como "cambio crítico"
-            if (field === 'email' || field === 'cedulaNumber' || field === 'cedulaPrefix') {
-                updated.criticalChange = true;
-            }
-
-            // Lógica de autogeneración de email
-            if (field === 'email') {
-                updated.isEmailManuallyEdited = true;
-            } else if (autoGenerateEmail && !updated.isEmailManuallyEdited && (field === 'userName' || field === 'cedulaNumber')) {
+            if (field === 'email' || field === 'cedulaNumber' || field === 'cedulaPrefix') updated.criticalChange = true;
+            if (field === 'email') updated.isEmailManuallyEdited = true;
+            else if (autoGenerateEmail && !updated.isEmailManuallyEdited && (field === 'userName' || field === 'cedulaNumber')) {
                 updated.email = generateEmailFromData(updated.userName, updated.cedulaNumber, customEmailDomain);
             }
-            
             updated.isValid = checkValidity(updated);
             return updated;
         }));
@@ -453,8 +448,6 @@ const BulkUserCreationPage: React.FC = () => {
     const handleUserBlur = (id: number) => {
         setExtractedUsers(prev => prev.map(u => {
             if (u.id === id) {
-                // Solo pasar a verificación (to_verify) si hubo un cambio crítico (Cédula/Email)
-                // Si solo se cambió el nombre o teléfono, el estado se mantiene como estaba
                 const newStatus = u.criticalChange ? 'to_verify' : u.status;
                 return { ...u, isBeingEdited: false, status: newStatus, criticalChange: false };
             }
@@ -462,9 +455,7 @@ const BulkUserCreationPage: React.FC = () => {
         }));
     };
 
-    const removeUser = (id: number) => {
-        setExtractedUsers(prev => prev.filter(u => u.id !== id));
-    };
+    const removeUser = (id: number) => setExtractedUsers(prev => prev.filter(u => u.id !== id));
 
     const verifyPending = () => {
         setExtractedUsers(prev => prev.map(u => {
@@ -492,6 +483,7 @@ const BulkUserCreationPage: React.FC = () => {
                     email: u.email,
                     phoneNumber: u.phoneNumber,
                     roleID: u.roleID,
+                    sexo: u.sexo, 
                     schoolID: authUser.schoolId,
                     passwordHash: useCedulaAsPassword ? u.cedulaNumber : "123456"
                 });
@@ -518,53 +510,37 @@ const BulkUserCreationPage: React.FC = () => {
             if (format === 'uppercase') newName = u.userName.toUpperCase();
             if (format === 'lowercase') newName = u.userName.toLowerCase();
             if (format === 'capitalize') newName = u.userName.toLowerCase().replace(/(?:^|\s)\S/g, l => l.toUpperCase());
-            
-            // Mantenimiento de datos: se basa en el objeto anterior para no perder email/rol
             let updated = { ...u, userName: newName };
-            
-            // Si el correo no fue editado manualmente y autogenerar está ON, actualizamos el correo basado en el nuevo formato del nombre
             if (autoGenerateEmail && !updated.isEmailManuallyEdited) {
                 updated.email = generateEmailFromData(updated.userName, updated.cedulaNumber, customEmailDomain);
             }
-            
             updated.isValid = checkValidity(updated);
-            // IMPORTANTE: Cambiar la nomenclatura del nombre NO fuerza el estado a 'to_verify'
             return updated;
         }));
     };
 
     const applyGlobalRole = (roleId: number) => {
-        // Solo actualiza el rol de todos los usuarios sin forzar verificación masiva (mantenimiento de integridad)
-        setExtractedUsers(prev => prev.map(u => ({ ...u, roleID: roleId })));
+        setExtractedUsers(prev => prev.map(u => ({ ...u, roleID: roleId, isValid: checkValidity({...u, roleID: roleId}) })));
     };
 
     useEffect(() => {
         if (extractedUsers.length === 0) return;
-
         const timer = setTimeout(() => {
             setExtractedUsers(prev => prev.map(u => {
-                // 1. Si el usuario ya editó su email manualmente, respetamos su decisión y no lo tocamos.
                 if (u.isEmailManuallyEdited) return u;
-
-                // 2. Si la autogeneración está activa, recalculamos el email.
                 if (autoGenerateEmail) {
                     const newEmail = generateEmailFromData(u.userName, u.cedulaNumber, customEmailDomain);
-                    
-                    // Solo actualizamos si el email cambia para evitar re-renderizados innecesarios
                     if (newEmail !== u.email) {
                         const updatedUser = { ...u, email: newEmail };
                         updatedUser.isValid = checkValidity(updatedUser);
                         return updatedUser;
                     }
                 }
-                
                 return u;
             }));
-        }, 300); // Pequeño delay (debounce) para no saturar mientras escribes rápido
-
+        }, 300);
         return () => clearTimeout(timer);
     }, [customEmailDomain, autoGenerateEmail, extractedUsers.length]); 
-    // ^^^ Estas dependencias aseguran que se ejecute al modificar el dominio o el checkbox
     
     return (
         <div className="p-6">
@@ -579,17 +555,13 @@ const BulkUserCreationPage: React.FC = () => {
 
                     {inputMode === 'file' ? (
                         <div className="space-y-4">
-                            <div 
-                                className="border-2 border-dashed border-primary/50 rounded-lg p-10 cursor-pointer hover:bg-background transition-colors text-center"
-                                onClick={() => fileInputRef.current?.click()}
-                            >
+                            <div className="border-2 border-dashed border-primary/50 rounded-lg p-10 cursor-pointer hover:bg-background transition-colors text-center" onClick={() => fileInputRef.current?.click()}>
                                 <input type="file" ref={fileInputRef} className="hidden" multiple accept="image/*,application/pdf,.xlsx,.xls,.csv" onChange={handleFileChange} />
                                 <div className="text-text-tertiary">
                                     <span className="block text-4xl mb-2">📂</span>
                                     {files.length === 0 ? "Haz clic para seleccionar hasta 10 archivos" : `${files.length} archivos seleccionados`}
                                 </div>
                             </div>
-                            
                             {files.length > 0 && (
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-xs font-bold text-text-secondary uppercase">
@@ -610,9 +582,7 @@ const BulkUserCreationPage: React.FC = () => {
                     ) : (
                         <textarea className="w-full p-4 border border-border rounded-md bg-background h-60 text-sm" placeholder="Pega aquí la lista de usuarios..." value={inputText} onChange={e => setInputText(e.target.value)} />
                     )}
-
                     {error && <p className="text-danger my-4 text-center">{error}</p>}
-
                     <button onClick={analyzeData} disabled={isAnalyzing || (inputMode === 'file' ? files.length === 0 : !inputText.trim())} className="w-full mt-6 bg-primary text-text-on-primary py-3 rounded-lg font-bold hover:bg-opacity-90 disabled:bg-secondary flex justify-center items-center">
                         {isAnalyzing ? <><SpinnerIcon className="mr-2" /> Analizando...</> : "Analizar con IA"}
                     </button>
@@ -628,7 +598,6 @@ const BulkUserCreationPage: React.FC = () => {
                             </div>
                             <button onClick={() => { setExtractedUsers([]); setStep('upload'); setFiles([]); setInputText(''); }} className="text-sm text-text-secondary hover:text-danger">Atrás / Reiniciar</button>
                         </div>
-                        
                         <div className="flex flex-wrap items-center gap-6 pt-2 border-t border-border">
                             <div className="flex items-center gap-2">
                                 <span className="text-sm font-bold text-text-secondary uppercase">Asignar Rol:</span>
@@ -643,14 +612,12 @@ const BulkUserCreationPage: React.FC = () => {
                                 <button onClick={() => applyNameFormat('lowercase')} className="px-2 py-1 bg-background border border-border rounded text-xs hover:bg-border" title="minúsculas">aa</button>
                                 <button onClick={() => applyNameFormat('capitalize')} className="px-2 py-1 bg-background border border-border rounded text-xs hover:bg-border" title="Nombre Propio">Aa</button>
                             </div>
-                            <button onClick={() => setExtractedUsers([ { id: Date.now(), userName: '', cedulaPrefix: 'V', cedulaNumber: '', email: '', phoneNumber: '', roleID: 1, isValid: false, isEmailManuallyEdited: false, status: 'new' }, ...extractedUsers])} className="bg-primary text-text-on-primary px-3 py-1 rounded text-sm flex items-center gap-1">
+                            <button onClick={() => setExtractedUsers([ { id: Date.now(), userName: '', cedulaPrefix: 'V', cedulaNumber: '', email: '', phoneNumber: '', roleID: 1, sexo: null, isValid: false, isEmailManuallyEdited: false, status: 'new' }, ...extractedUsers])} className="bg-primary text-text-on-primary px-3 py-1 rounded text-sm flex items-center gap-1">
                                 <PlusIcon className="w-4 h-4"/> Manual
                             </button>
                         </div>
                     </div>
-
-                    {creationStatus && <div className="mb-4 p-3 bg-success-light text-success-text rounded text-center">Creados: {creationStatus.success} | Fallidos: {creationStatus.failed}</div>}
-
+                    {creationStatus && <div className="mb-4 p-3 bg-success-light text-success-text rounded text-center font-bold">Resumen: {creationStatus.success} creados, {creationStatus.failed} fallidos.</div>}
                     <div className="space-y-8">
                         {duplicateUsers.length > 0 && (
                             <section>
@@ -678,10 +645,9 @@ const BulkUserCreationPage: React.FC = () => {
                             </div>
                         </section>
                     </div>
-
                     <div className="fixed bottom-0 left-0 right-0 bg-surface p-4 shadow-lg border-t border-border flex justify-end items-center gap-4 z-40 md:pl-64">
-                        <button onClick={handleBulkCreate} disabled={isCreating || newUsers.length === 0} className="bg-success text-text-on-primary py-3 px-8 rounded-lg font-bold text-lg hover:bg-opacity-90 disabled:bg-secondary shadow-md flex items-center">
-                            {isCreating ? <><SpinnerIcon className="mr-2"/> Procesando...</> : `Crear ${newUsers.length} Usuarios`}
+                        <button onClick={handleBulkCreate} disabled={isCreating || newUsers.filter(u => u.isValid).length === 0} className="bg-success text-text-on-primary py-3 px-8 rounded-lg font-bold text-lg hover:bg-opacity-90 disabled:bg-secondary shadow-md flex items-center">
+                            {isCreating ? <><SpinnerIcon className="mr-2"/> Procesando...</> : `Crear ${newUsers.filter(u => u.isValid).length} Usuarios`}
                         </button>
                     </div>
                 </div>

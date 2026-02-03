@@ -1,16 +1,18 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
 import { User, ROLES } from '../../types';
-import { BellIcon, BlockIcon, BookOpenIcon, CreditCardIcon, FamilyIcon, DocumentTextIcon, ShoppingCartIcon, SpinnerIcon } from '../../components/icons';
+import { BellIcon, BlockIcon, BookOpenIcon, CreditCardIcon, FamilyIcon, DocumentTextIcon, ShoppingCartIcon, SpinnerIcon, MaleIcon, FemaleIcon, SparklesIcon } from '../../components/icons';
 import TaughtCoursesModal from './TaughtCoursesModal';
 import ParentPaymentsModal from './ParentPaymentsModal';
 import ParentNotificationsModal from './ParentNotificationsModal';
 import UserRelationshipsModal from './UserRelationshipsModal';
 import UserDetailsModal from './UserDetailsModal';
 import Modal from '../../components/Modal';
+import AiGenderAssignmentModal from './AiGenderAssignmentModal'; // Import new modal
 
 const UserListPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -19,6 +21,7 @@ const UserListPage: React.FC = () => {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [genderFilter, setGenderFilter] = useState('all'); 
   
   const [viewingCoursesFor, setViewingCoursesFor] = useState<User | null>(null);
   const [viewingPaymentsFor, setViewingPaymentsFor] = useState<User | null>(null);
@@ -26,11 +29,14 @@ const UserListPage: React.FC = () => {
   const [viewingRelationshipsFor, setViewingRelationshipsFor] = useState<User | null>(null);
   const [viewingDetailsFor, setViewingDetailsFor] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  
+  // AI Gender Modal State
+  const [isAiGenderModalOpen, setIsAiGenderModalOpen] = useState(false);
 
   // Print Modal States
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [selectedPrintRoles, setSelectedPrintRoles] = useState<number[]>([]);
-  const [includeStudentDetails, setIncludeStudentDetails] = useState(true); // Default true
+  const [includeStudentDetails, setIncludeStudentDetails] = useState(true); 
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   const { user, hasPermission } = useAuth();
@@ -49,7 +55,6 @@ const UserListPage: React.FC = () => {
         ]);
         setUsers(usersData);
         setSchoolName(schoolData);
-        // Initialize print roles with empty
         setSelectedPrintRoles([]);
         setError('');
       } catch (err: any) {
@@ -77,38 +82,62 @@ const UserListPage: React.FC = () => {
 
     const originalUsers = [...users];
     
-    // Optimistic update: remove user from UI immediately
+    // Optimistic update
     setUsers(prevUsers => prevUsers.filter(u => u.userID !== userToDelete.userID));
     setError('');
-    setUserToDelete(null); // Close modal immediately
+    setUserToDelete(null); 
 
     try {
       await apiService.deleteUser(userToDelete.userID);
-      // On success, no need to refetch, UI is already updated.
     } catch (err: any) {
-      // On failure, revert the state and show an error
       setUsers(originalUsers);
       setError(err.message || 'Ocurrió un error inesperado al eliminar el usuario.');
       console.error("Delete user error:", err);
     }
   };
 
+  const handleGenderChange = async (userId: number, gender: 'M' | 'F') => {
+      const currentUser = users.find(u => u.userID === userId);
+      if (!currentUser || currentUser.sexo === gender) return;
+
+      const previousGender = currentUser.sexo;
+
+      setUsers(prev => prev.map(u => u.userID === userId ? { ...u, sexo: gender } : u));
+
+      try {
+          const payload = {
+              ...currentUser, 
+              userID: userId,
+              sexo: gender
+          };
+          await apiService.updateUser(userId, payload);
+      } catch (err) {
+          console.error("Failed to update gender", err);
+          setUsers(prev => prev.map(u => u.userID === userId ? { ...u, sexo: previousGender } : u));
+      }
+  };
+
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
         const roleMatch = roleFilter === 'all' || u.roleID === parseInt(roleFilter);
+        
+        let genderMatch = true;
+        if (genderFilter === 'M') genderMatch = u.sexo === 'M';
+        else if (genderFilter === 'F') genderMatch = u.sexo === 'F';
+        else if (genderFilter === 'none') genderMatch = !u.sexo;
+
         const searchMatch = (
             u.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (u.cedula && u.cedula.toLowerCase().includes(searchTerm.toLowerCase()))
         );
-        return roleMatch && searchMatch;
+        return roleMatch && genderMatch && searchMatch;
     });
-  }, [users, searchTerm, roleFilter]);
+  }, [users, searchTerm, roleFilter, genderFilter]);
 
   // --- Print Logic ---
 
   const handleOpenPrintModal = () => {
-      // Initialize with NO roles selected by default (optimization)
       setSelectedPrintRoles([]);
       setIncludeStudentDetails(true);
       setIsPrintModalOpen(true);
@@ -128,11 +157,9 @@ const UserListPage: React.FC = () => {
       setSelectedPrintRoles([]);
   };
 
-  // Helper to enrich data with Classroom and Parents using Batch Processing
   const enrichUsersWithDetails = async (baseUsers: User[]) => {
       if (!includeStudentDetails || !user?.schoolId) return baseUsers;
 
-      // 1. Fetch Classrooms Map (One request for all)
       let classroomMap = new Map<number, string>();
       try {
           const classrooms = await apiService.getClassrooms(user.schoolId);
@@ -141,8 +168,6 @@ const UserListPage: React.FC = () => {
           console.error("Error fetching classrooms for report", e);
       }
 
-      // 2. Process Users in Batches to avoid Network Saturation
-      // Browsers limit concurrent connections (usually 6). Batching ensures reliable data fetching.
       const enrichedResults: any[] = [];
       const BATCH_SIZE = 10; 
 
@@ -150,7 +175,6 @@ const UserListPage: React.FC = () => {
           const batch = baseUsers.slice(i, i + BATCH_SIZE);
           
           const batchPromises = batch.map(async (u) => {
-              // Only process details for students (Role 1)
               if (u.roleID !== 1) return u;
 
               let parentNames = '';
@@ -158,8 +182,6 @@ const UserListPage: React.FC = () => {
               try {
                   const parents = await apiService.getParentsOfChild(u.userID, user.schoolId);
                   
-                  // FIX: El endpoint de relaciones no devuelve el email. 
-                  // Buscamos el usuario completo en la lista local 'users' usando el ID.
                   const parentsWithDetails = parents.map(p => {
                       const fullUser = users.find(existingUser => existingUser.userID === p.userID);
                       return {
@@ -171,7 +193,6 @@ const UserListPage: React.FC = () => {
                   parentNames = parentsWithDetails.map(p => p.userName).join(', ');
                   parentEmails = parentsWithDetails.map(p => p.email).join(', ');
               } catch (e) {
-                  // Silent fail for individual parent fetch to keep report generation going
                   console.warn(`Error fetching parents for ${u.userName}`, e);
               }
 
@@ -185,7 +206,6 @@ const UserListPage: React.FC = () => {
               };
           });
 
-          // Wait for the current batch to finish before starting the next
           const batchResult = await Promise.all(batchPromises);
           enrichedResults.push(...batchResult);
       }
@@ -197,7 +217,6 @@ const UserListPage: React.FC = () => {
       return users
           .filter(u => selectedPrintRoles.includes(u.roleID))
           .sort((a, b) => {
-              // Sort by Role first, then Name
               if (a.roleID !== b.roleID) return a.roleID - b.roleID;
               return a.userName.localeCompare(b.userName);
           });
@@ -240,12 +259,12 @@ const UserListPage: React.FC = () => {
       try {
           const enrichedList = await enrichUsersWithDetails(basicList);
 
-          // Format data for Excel
           const excelData = enrichedList.map((u: any, index) => {
               const baseData = {
                   "No.": index + 1,
                   "Nombre Completo": u.userName,
                   "Cédula": u.cedula || 'N/A',
+                  "Sexo": u.sexo || 'N/A',
                   "Correo Electrónico": u.email,
                   "Teléfono": u.phoneNumber || 'N/A',
                   "Rol": getRoleName(u.roleID),
@@ -265,18 +284,18 @@ const UserListPage: React.FC = () => {
 
           const worksheet = XLSX.utils.json_to_sheet(excelData);
           
-          // Auto-width columns
           const wscols = [
-              { wch: 5 },  // No
-              { wch: 30 }, // Nombre
-              { wch: 15 }, // Cedula
-              { wch: 30 }, // Email
-              { wch: 15 }, // Telefono
-              { wch: 15 }, // Rol
-              { wch: 10 }, // Estado
-              { wch: 20 }, // Salon
-              { wch: 30 }, // Padres
-              { wch: 35 }, // Email Padres
+              { wch: 5 },  
+              { wch: 30 }, 
+              { wch: 15 }, 
+              { wch: 5 }, 
+              { wch: 30 }, 
+              { wch: 15 }, 
+              { wch: 15 }, 
+              { wch: 10 }, 
+              { wch: 20 }, 
+              { wch: 30 }, 
+              { wch: 35 }, 
           ];
           worksheet['!cols'] = wscols;
 
@@ -305,10 +324,17 @@ const UserListPage: React.FC = () => {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold text-text-primary">Lista de Usuarios</h1>
         {canManageUsers && (
-          <div className="space-x-2">
+          <div className="flex flex-wrap gap-2">
+              <button 
+                onClick={() => setIsAiGenderModalOpen(true)}
+                className="bg-accent text-text-on-accent py-2 px-4 rounded hover:bg-accent/90 transition-colors inline-flex items-center"
+                title="Asignar géneros faltantes con Inteligencia Artificial"
+              >
+                <SparklesIcon className="w-5 h-5 mr-2"/> Asignar Géneros (IA)
+              </button>
               <button 
                 onClick={handleOpenPrintModal} 
                 className="bg-info text-text-on-primary py-2 px-4 rounded hover:bg-info-dark transition-colors inline-flex items-center"
@@ -323,7 +349,7 @@ const UserListPage: React.FC = () => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
           <input 
             type="text"
             placeholder="Buscar por nombre, email, cédula..."
@@ -339,6 +365,16 @@ const UserListPage: React.FC = () => {
             <option value="all">Todos los Roles</option>
             {ROLES.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}
           </select>
+          <select
+            value={genderFilter}
+            onChange={e => setGenderFilter(e.target.value)}
+            className="w-full p-2 border border-border rounded bg-surface focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"
+          >
+            <option value="all">Todos los Géneros</option>
+            <option value="M">Masculino</option>
+            <option value="F">Femenino</option>
+            <option value="none">No asignado</option>
+          </select>
       </div>
 
       {loading && <p>Cargando usuarios...</p>}
@@ -350,6 +386,7 @@ const UserListPage: React.FC = () => {
             <thead className="bg-header">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Nombre</th>
+                <th className="px-3 py-3 text-center text-xs font-medium text-text-on-primary uppercase tracking-wider w-24">Sexo</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Email</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Cédula</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-text-on-primary uppercase tracking-wider">Teléfono</th>
@@ -361,6 +398,24 @@ const UserListPage: React.FC = () => {
               {filteredUsers.map((u) => (
                 <tr key={u.userID} onDoubleClick={() => setViewingDetailsFor(u)} className={`hover:bg-background cursor-pointer ${u.isBlocked ? 'bg-danger-light' : ''}`}>
                   <td className="px-6 py-4 whitespace-nowrap">{u.userName}</td>
+                  <td className="px-3 py-4 whitespace-nowrap text-center">
+                      <div className="flex justify-center items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <button 
+                            onClick={() => handleGenderChange(u.userID, 'M')}
+                            className={`p-1 rounded-full hover:bg-gray-200 transition-opacity ${u.sexo === 'M' ? 'text-info-dark opacity-100' : 'text-gray-400 opacity-40 hover:opacity-100'}`}
+                            title="Masculino"
+                          >
+                            <MaleIcon />
+                          </button>
+                          <button 
+                            onClick={() => handleGenderChange(u.userID, 'F')}
+                            className={`p-1 rounded-full hover:bg-gray-200 transition-opacity ${u.sexo === 'F' ? 'text-pink-500 opacity-100' : 'text-gray-400 opacity-40 hover:opacity-100'}`}
+                            title="Femenino"
+                          >
+                            <FemaleIcon />
+                          </button>
+                      </div>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">{u.email}</td>
                   <td className="px-6 py-4 whitespace-nowrap">{u.cedula}</td>
                   <td className="px-6 py-4 whitespace-nowrap">{u.phoneNumber}</td>
@@ -488,6 +543,15 @@ const UserListPage: React.FC = () => {
                   </div>
               </div>
           </Modal>
+      )}
+
+      {/* AI Gender Modal */}
+      {isAiGenderModalOpen && (
+          <AiGenderAssignmentModal 
+              users={users} 
+              onClose={() => setIsAiGenderModalOpen(false)} 
+              onSuccess={fetchUsers} 
+          />
       )}
 
       {userToDelete && (

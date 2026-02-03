@@ -13,6 +13,20 @@ interface BoletaReportProps {
   templateRef: React.RefObject<HTMLDivElement>;
 }
 
+// --- NUEVO COMPONENTE DE ÍCONO (TU SVG) ---
+const CrossMarkIcon = () => (
+    <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        fill="#000000" 
+        width="14px" // Ajustado para que se vea bien en la celda
+        height="14px" 
+        viewBox="0 0 1024 1024"
+        style={{ display: 'inline-block', verticalAlign: 'middle' }} // Alineación
+    >
+        <path d="M697.4 759.2l61.8-61.8L573.8 512l185.4-185.4-61.8-61.8L512 450.2 326.6 264.8l-61.8 61.8L450.2 512 264.8 697.4l61.8 61.8L512 573.8z"/>
+    </svg>
+);
+
 // Helper to strip status tags before parsing
 const cleanContent = (content: string | undefined | null) => {
     if (!content) return '';
@@ -56,8 +70,8 @@ const SectionTable: React.FC<{section: IndicatorSection, sectionIndex: number, g
                                 // Robustness: If data accidentally has "Con Ayuda", map it to "Sin Evidencias" column
                                 const isChecked = value === option || (option === "Sin Evidencias" && value === "Con Ayuda");
                                 return (
-                                    <td key={option} className="border border-black p-1 text-center font-bold">
-                                        {isChecked ? 'X' : ''}
+                                    <td key={option} className="border border-black p-1 text-center font-bold align-middle">
+                                        {isChecked ? <CrossMarkIcon /> : ''}
                                     </td>
                                 )
                             })}
@@ -499,10 +513,10 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
                                     return (
                                         <tr key={indicatorIndex} className="even:bg-gray-50">
                                             <td className="border border-black p-1">{indicator.text}</td>
-                                            <td className="border border-black p-1 text-center font-bold">{value === "Consolidado" ? 'X' : ''}</td>
-                                            <td className="border border-black p-1 text-center font-bold">{value === "En proceso" ? 'X' : ''}</td>
-                                            <td className="border border-black p-1 text-center font-bold">{value === "Iniciado" ? 'X' : ''}</td>
-                                            <td className="border border-black p-1 text-center font-bold">{(value === "Con Ayuda" || value === "Sin Evidencias") ? 'X' : ''}</td>
+                                            <td className="border border-black p-1 text-center font-bold align-middle">{value === "Consolidado" ? <CrossMarkIcon /> : ''}</td>
+                                            <td className="border border-black p-1 text-center font-bold align-middle">{value === "En proceso" ? <CrossMarkIcon /> : ''}</td>
+                                            <td className="border border-black p-1 text-center font-bold align-middle">{value === "Iniciado" ? <CrossMarkIcon /> : ''}</td>
+                                            <td className="border border-black p-1 text-center font-bold align-middle">{(value === "Con Ayuda" || value === "Sin Evidencias") ? <CrossMarkIcon /> : ''}</td>
                                         </tr>
                                     );
                                 })}

@@ -1,40 +1,57 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
-import { Evaluation, Course, Classroom } from '../../types';
-import { CalendarIcon, SchoolIcon } from '../../components/icons';
+import { Certificate } from '../../types';
+import { CalendarIcon, PlusIcon, TrashIcon, BookOpenIcon, SchoolIcon } from '../../components/icons';
+import Modal from '../../components/Modal';
+
+const CERT_TYPE_PLAN = "Plan de Contenido";
+
+interface PlanJson {
+    title: string;
+    course: string;
+    classroom: string;
+    contenido: string;
+    indicadores: string;
+}
 
 const PlanEvaluacionPage: React.FC = () => {
-    const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
-    const [courses, setCourses] = useState<Course[]>([]);
-    const [classrooms, setClassrooms] = useState<Classroom[]>([]);
+    const [plans, setPlans] = useState<Certificate[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     
-    // Filters
-    const [selectedCourse, setSelectedCourse] = useState<string>('');
-    const [selectedClassroom, setSelectedClassroom] = useState<string>('');
+    // UI State
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [planToDelete, setPlanToDelete] = useState<number | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    
+    // Form State
+    const [formData, setFormData] = useState<PlanJson>({
+        title: '',
+        course: '',
+        classroom: '',
+        contenido: '',
+        indicadores: ''
+    });
 
-    const { user } = useAuth();
+    const { user, hasPermission } = useAuth();
+    
+    // CAMBIO CRÍTICO: Solo administradores (6) y super admins (7) pueden gestionar (Crear/Eliminar)
+    const canManage = useMemo(() => hasPermission([6, 7]), [hasPermission]);
 
     const fetchData = async () => {
-        if (user?.schoolId && user?.userId) {
+        if (user?.schoolId) {
             try {
                 setLoading(true);
                 setError('');
-                const [evalData, allCourses, allClassrooms] = await Promise.all([
-                    apiService.getEvaluations(user.schoolId, user.userId),
-                    apiService.getCourses(user.schoolId),
-                    apiService.getClassrooms(user.schoolId)
-                ]);
-                
-                // Filter only NON-EVALUABLE evaluations
-                const planEvals = evalData.filter(e => e.description?.includes('| No evaluado |'));
-                setEvaluations(planEvals);
-                setCourses(allCourses);
-                setClassrooms(allClassrooms);
+                const data = await apiService.getCertificates(user.schoolId);
+                // Filtrar solo planes de contenido (antes plan de evaluación)
+                // Nota: Por compatibilidad también podría filtrar por el tipo viejo si existieran registros previos
+                const filtered = data.filter(c => c.certificateType === CERT_TYPE_PLAN || c.certificateType === "Plan de Evaluación");
+                setPlans(filtered.sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime()));
             } catch (err: any) {
-                setError('No se pudo cargar el plan de evaluación.');
+                setError('No se pudo cargar el listado de planes.');
                 console.error(err);
             } finally {
                 setLoading(false);
@@ -46,121 +63,135 @@ const PlanEvaluacionPage: React.FC = () => {
         fetchData();
     }, [user]);
 
-    const cleanDescription = (desc: string | null | undefined) => {
-        if (!desc) return 'Sin descripción.';
-        return desc
-            .replace('| No evaluado |', '')
-            .replace(/@@OVERRIDE:.*$/, '')
-            .split('@')[0]
-            .trim();
+    const parsePlanContent = (content: string): PlanJson => {
+        try {
+            return JSON.parse(content);
+        } catch (e) {
+            return {
+                title: 'Plan sin título',
+                course: 'N/A',
+                classroom: 'N/A',
+                contenido: content,
+                indicadores: ''
+            };
+        }
     };
 
-    const filteredEvaluations = useMemo(() => {
-        return evaluations.filter(e => {
-            const courseMatch = !selectedCourse || e.courseID === Number(selectedCourse);
-            const classroomMatch = !selectedClassroom || e.classroomID === Number(selectedClassroom);
-            return courseMatch && classroomMatch;
-        }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [evaluations, selectedCourse, selectedClassroom]);
+    const handleCreate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!user?.schoolId || !canManage) return;
 
-    const classroomMap = useMemo(() => new Map(classrooms.map(c => [c.classroomID, c.name])), [classrooms]);
-    const courseMap = useMemo(() => new Map(courses.map(c => [c.courseID, c.name])), [courses]);
+        setIsSaving(true);
+        try {
+            const payload = {
+                userId: user.userId, 
+                certificateType: CERT_TYPE_PLAN,
+                content: JSON.stringify(formData),
+                schoolId: user.schoolId,
+                issueDate: new Date().toISOString(),
+                signatoryName: "", 
+                signatoryTitle: ""  
+            };
+
+            await apiService.createCertificate(payload);
+            setFormData({ title: '', course: '', classroom: '', contenido: '', indicadores: '' });
+            setIsCreateModalOpen(false);
+            fetchData();
+        } catch (err: any) {
+            alert("Error al guardar: " + err.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!planToDelete || !user?.schoolId || !canManage) return;
+        try {
+            await apiService.deleteCertificate(planToDelete, user.schoolId);
+            setPlanToDelete(null);
+            fetchData();
+        } catch (err: any) {
+            alert("Error al eliminar.");
+        }
+    };
 
     if (loading) return <div className="flex justify-center p-12"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
 
     return (
-        <div className="max-w-5xl mx-auto">
-            <header className="mb-8">
-                <div className="flex items-center gap-3 mb-2">
-                    <div className="p-3 bg-primary text-white rounded-xl shadow-lg">
-                        <CalendarIcon className="w-8 h-8" />
+        <div className="max-w-6xl mx-auto">
+            <header className="mb-8 flex justify-between items-center">
+                <div>
+                    <div className="flex items-center gap-3 mb-1">
+                        <div className="p-3 bg-accent text-white rounded-xl shadow-lg">
+                            <CalendarIcon className="w-8 h-8" />
+                        </div>
+                        <h1 className="text-3xl font-extrabold text-text-primary">Planes de Contenido</h1>
                     </div>
-                    <h1 className="text-3xl font-extrabold text-text-primary">Plan de Evaluación</h1>
+                    <p className="text-text-secondary text-lg">Información descriptiva del curso y los indicadores de avance académico.</p>
                 </div>
-                <p className="text-text-secondary text-lg">Cronograma informativo de actividades y temas del lapso.</p>
-            </header>
-
-            {/* Filters Bar */}
-            <div className="bg-surface p-4 rounded-2xl shadow-sm border border-border mb-8 flex flex-wrap gap-4 items-center">
-                <div className="flex-1 min-w-[200px]">
-                    <label className="block text-xs font-bold text-text-tertiary uppercase mb-1">Filtrar por Salón</label>
-                    <div className="relative">
-                        <select 
-                            value={selectedClassroom} 
-                            onChange={e => setSelectedClassroom(e.target.value)}
-                            className="w-full px-4 py-2 rounded-lg border border-border bg-background focus:ring-2 focus:ring-accent/50 outline-none transition-all appearance-none"
-                        >
-                            <option value="">Todos los Salones</option>
-                            {classrooms.map(c => <option key={c.classroomID} value={c.classroomID}>{c.name}</option>)}
-                        </select>
-                    </div>
-                </div>
-
-                <div className="flex-1 min-w-[200px]">
-                    <label className="block text-xs font-bold text-text-tertiary uppercase mb-1">Filtrar por Curso</label>
-                    <div className="relative">
-                        <select 
-                            value={selectedCourse} 
-                            onChange={e => setSelectedCourse(e.target.value)}
-                            className="w-full px-4 py-2 rounded-lg border border-border bg-background focus:ring-2 focus:ring-accent/50 outline-none transition-all appearance-none"
-                        >
-                            <option value="">Todos los Cursos</option>
-                            {courses.map(c => <option key={c.courseID} value={c.courseID}>{c.name}</option>)}
-                        </select>
-                    </div>
-                </div>
-
-                {(selectedCourse || selectedClassroom) && (
+                {/* Botón visible solo para administradores */}
+                {canManage && (
                     <button 
-                        onClick={() => { setSelectedCourse(''); setSelectedClassroom(''); }}
-                        className="mt-5 text-sm text-accent hover:underline font-bold"
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="bg-primary text-white py-2 px-6 rounded-xl shadow-md hover:opacity-90 transition-all flex items-center gap-2 font-bold"
                     >
-                        Limpiar Filtros
+                        <PlusIcon className="w-5 h-5" /> Nuevo Plan
                     </button>
                 )}
-            </div>
+            </header>
 
-            {error && <div className="bg-danger-light text-danger p-4 rounded-lg mb-6 shadow-sm border border-danger/20">{error}</div>}
+            {error && <div className="bg-danger-light text-danger p-4 rounded-lg mb-6 border border-danger/20">{error}</div>}
 
-            {filteredEvaluations.length > 0 ? (
-                <div className="relative border-l-2 border-primary/20 ml-4 space-y-8 pb-8">
-                    {filteredEvaluations.map((ev) => {
-                        const classroomName = classroomMap.get(ev.classroomID || 0) || 'General';
-                        const courseName = courseMap.get(ev.courseID) || 'Curso';
-                        const date = new Date(ev.date);
-                        
+            {plans.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {plans.map((plan) => {
+                        const info = parsePlanContent(plan.content);
                         return (
-                            <div key={ev.evaluationID} className="relative pl-8 animate-fade-in-down">
-                                {/* Dot on timeline */}
-                                <div className="absolute left-[-9px] top-0 w-4 h-4 bg-primary rounded-full border-4 border-white shadow-sm"></div>
+                            <div key={plan.certificateId} className="bg-surface rounded-3xl border border-border shadow-md hover:shadow-xl transition-all overflow-hidden flex flex-col group relative">
+                                {/* Botón de eliminar visible solo para administradores */}
+                                {canManage && (
+                                    <button 
+                                        onClick={() => setPlanToDelete(plan.certificateId)}
+                                        className="absolute top-4 right-4 p-2 text-text-tertiary hover:text-danger bg-background/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <TrashIcon className="w-5 h-5" />
+                                    </button>
+                                )}
                                 
-                                <div className="bg-surface rounded-2xl p-6 shadow-md border border-transparent hover:border-primary/20 hover:shadow-xl transition-all group">
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="text-center bg-background rounded-xl p-2 min-w-[60px]">
-                                                <span className="block text-xs font-bold text-accent uppercase">{date.toLocaleString('es-ES', { month: 'short' })}</span>
-                                                <span className="block text-xl font-black text-primary">{date.getDate()}</span>
-                                            </div>
-                                            <div>
-                                                <h3 className="text-xl font-bold text-text-primary group-hover:text-primary transition-colors">{ev.title}</h3>
-                                                <div className="flex flex-wrap gap-2 mt-1">
-                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                                                        No evaluable
-                                                    </span>
-                                                    <span className="text-xs text-text-tertiary flex items-center">
-                                                        <SchoolIcon className="w-3 h-3 mr-1" /> {classroomName}
-                                                    </span>
-                                                </div>
-                                            </div>
+                                <div className="p-6 bg-background border-b border-border">
+                                    <div className="flex gap-4 mb-4">
+                                        <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                                            <BookOpenIcon className="w-3 h-3" /> {info.course}
                                         </div>
-                                        <div className="bg-primary/5 px-4 py-2 rounded-xl border border-primary/10">
-                                            <span className="text-xs font-bold text-primary block uppercase tracking-wider">Materia</span>
-                                            <span className="font-semibold text-text-primary text-sm">{courseName}</span>
+                                        <div className="bg-accent/10 text-accent px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                                            <SchoolIcon className="w-3 h-3" /> {info.classroom}
+                                        </div>
+                                    </div>
+                                    <h3 className="text-2xl font-black text-text-primary leading-tight mb-2">
+                                        {info.title}
+                                    </h3>
+                                    <span className="text-[10px] text-text-tertiary font-bold uppercase">Publicado: {new Date(plan.issueDate).toLocaleDateString()}</span>
+                                </div>
+
+                                <div className="p-6 flex-grow space-y-6">
+                                    <div className="space-y-2">
+                                        <h4 className="text-xs font-black text-primary uppercase tracking-widest flex items-center">
+                                            <span className="w-1.5 h-4 bg-primary rounded-full mr-2"></span>
+                                            Contenido Temático
+                                        </h4>
+                                        <div className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap pl-3.5">
+                                            {info.contenido}
                                         </div>
                                     </div>
 
-                                    <div className="prose prose-sm text-text-secondary">
-                                        <p className="whitespace-pre-wrap">{cleanDescription(ev.description)}</p>
+                                    <div className="space-y-2">
+                                        <h4 className="text-xs font-black text-accent uppercase tracking-widest flex items-center">
+                                            <span className="w-1.5 h-4 bg-accent rounded-full mr-2"></span>
+                                            Indicadores
+                                        </h4>
+                                        <div className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap pl-3.5 italic bg-accent/5 p-4 rounded-2xl border border-accent/10">
+                                            {info.indicadores}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -172,8 +203,94 @@ const PlanEvaluacionPage: React.FC = () => {
                     <div className="bg-background w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                         <CalendarIcon className="w-8 h-8 text-text-tertiary" />
                     </div>
-                    <p className="text-text-secondary text-lg">No hay cronogramas informativos registrados con estos filtros.</p>
+                    <p className="text-text-secondary text-lg">No hay planes de contenido publicados.</p>
                 </div>
+            )}
+
+            {/* Create Modal */}
+            {isCreateModalOpen && canManage && (
+                <Modal isOpen={true} onClose={() => setIsCreateModalOpen(false)} title="Crear Plan de Contenido">
+                    <form onSubmit={handleCreate} className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Título del Plan</label>
+                            <input 
+                                type="text" 
+                                required
+                                value={formData.title}
+                                onChange={e => setFormData({...formData, title: e.target.value})}
+                                className="w-full p-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-accent/50 outline-none"
+                                placeholder="Ej: Contenido Programático 1er Lapso"
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Curso / Materia</label>
+                                <input 
+                                    type="text" 
+                                    required
+                                    value={formData.course}
+                                    onChange={e => setFormData({...formData, course: e.target.value})}
+                                    className="w-full p-2 border border-border rounded-lg bg-background"
+                                    placeholder="Ej: Matemáticas"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Salón / Sección</label>
+                                <input 
+                                    type="text" 
+                                    required
+                                    value={formData.classroom}
+                                    onChange={e => setFormData({...formData, classroom: e.target.value})}
+                                    className="w-full p-2 border border-border rounded-lg bg-background"
+                                    placeholder="Ej: 3er Año A"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Contenido Académico</label>
+                            <textarea 
+                                required
+                                rows={4}
+                                value={formData.contenido}
+                                onChange={e => setFormData({...formData, contenido: e.target.value})}
+                                className="w-full p-2 border border-border rounded-lg bg-background"
+                                placeholder="Describa los temas..."
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Indicadores</label>
+                            <textarea 
+                                required
+                                rows={4}
+                                value={formData.indicadores}
+                                onChange={e => setFormData({...formData, indicadores: e.target.value})}
+                                className="w-full p-2 border border-border rounded-lg bg-background"
+                                placeholder="Criterios u objetivos..."
+                            />
+                        </div>
+                        <div className="flex justify-end gap-3 pt-4 border-t">
+                            <button type="button" onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-text-secondary hover:underline font-bold">Cancelar</button>
+                            <button 
+                                type="submit" 
+                                disabled={isSaving}
+                                className="bg-primary text-white py-2 px-6 rounded-lg font-bold shadow-md hover:opacity-90 disabled:bg-secondary"
+                            >
+                                {isSaving ? 'Guardando...' : 'Publicar Plan'}
+                            </button>
+                        </div>
+                    </form>
+                </Modal>
+            )}
+
+            {/* Delete Modal */}
+            {planToDelete && canManage && (
+                <Modal isOpen={true} onClose={() => setPlanToDelete(null)} title="Eliminar Plan">
+                    <p className="mb-6">¿Estás seguro de que deseas eliminar este plan de contenido? Esta acción no se puede deshacer.</p>
+                    <div className="flex justify-end gap-3">
+                        <button onClick={() => setPlanToDelete(null)} className="px-4 py-2 border rounded-lg font-bold">Cancelar</button>
+                        <button onClick={handleDelete} className="bg-danger text-white py-2 px-6 rounded-lg font-bold">Eliminar permanentemente</button>
+                    </div>
+                </Modal>
             )}
         </div>
     );

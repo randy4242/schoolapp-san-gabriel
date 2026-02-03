@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useForm, SubmitHandler } from 'react-hook-form';
@@ -39,7 +40,7 @@ const ProductFormPage: React.FC = () => {
             Promise.all([
                 apiService.getProductWithAudiences(parseInt(id!), user.schoolId),
                 apiService.getUsers(user.schoolId) // Fetch all users for name resolution
-            ]).then(([{ product, audiences }, allUsers]) => {
+            ]).then(([{ product, audiences: fetchedAudiences }, allUsers]) => {
                 setValue('sku', product.sku);
                 setValue('name', product.name);
                 setValue('description', product.description || '');
@@ -50,16 +51,17 @@ const ProductFormPage: React.FC = () => {
                 const userMap = new Map(allUsers.map(u => [u.userID, u.userName]));
                 const roleMap = new Map(ROLES.map(r => [r.id, r.name]));
 
-                const audienceStates: AudienceState[] = audiences.map(a => {
-                    let display = `${a.targetType}:${a.targetID}`; // Fallback display
-                    if (a.targetType === 'All') {
+                const audienceStates: AudienceState[] = fetchedAudiences.map(a => {
+                    const targetType = (a.targetType || 'All') as 'All' | 'Role' | 'User' | 'Classroom';
+                    let display = `${targetType}:${a.targetID}`; // Fallback display
+                    if (targetType === 'All') {
                         display = 'Todos';
-                    } else if (a.targetType === 'Role' && a.targetID) {
+                    } else if (targetType === 'Role' && a.targetID) {
                         display = roleMap.get(a.targetID) || `Rol #${a.targetID}`;
-                    } else if (a.targetType === 'User' && a.targetID) {
+                    } else if (targetType === 'User' && a.targetID) {
                         display = userMap.get(a.targetID) || `Usuario #${a.targetID}`;
                     }
-                    return { ...a, display };
+                    return { targetType, targetID: a.targetID || null, display };
                 });
                 setAudiences(audienceStates);
 

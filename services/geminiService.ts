@@ -5,15 +5,13 @@ class GeminiService {
     private localClient: GoogleGenAI | null = null;
 
     constructor() {
-        // HÍBRIDO: Detección de entorno.
-        // 1. Google AI Studio: Inyecta process.env.API_KEY automáticamente.
-        // FIX: Obtained API Key exclusively from process.env.API_KEY. Fallback removed.
-        
+        // FIX: The API key must be obtained exclusively from the environment variable process.env.API_KEY.
         const apiKey = process.env.API_KEY;
 
         if (apiKey) {
             console.log("GeminiService: API Key detectada en entorno local. Usando cliente directo.");
-            this.localClient = new GoogleGenAI({ apiKey: apiKey });
+            // FIX: Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+            this.localClient = new GoogleGenAI({ apiKey });
         } else {
             console.log("GeminiService: No se detectó API Key local. Usando Proxy Serverless (/api/gemini).");
         }
@@ -21,27 +19,26 @@ class GeminiService {
 
     async generateContent(params: any): Promise<{ text: string | undefined }> {
         if (this.localClient) {
-            // --- MODO LOCAL (Google AI Studio / Dev) ---
-            // Llamada directa al SDK sin pasar por el backend
+            // --- MODO LOCAL (SDK Directo) ---
             try {
-                // Desestructuramos params para asegurar que coincidan con la firma del SDK
                 const { model, contents, config } = params;
 
-                // FIX: Updated default model to gemini-3-flash-preview for basic text tasks.
+                // FIX: Use 'gemini-3-flash-preview' for basic text tasks if not specified.
+                // FIX: Must use ai.models.generateContent to query GenAI with both the model name and prompt.
                 const response = await this.localClient.models.generateContent({
                     model: model || "gemini-3-flash-preview",
                     contents,
                     config
                 });
-                // FIX: Accessing response.text property directly.
+                
+                // FIX: The generated text content is accessed by the .text property on the GenerateContentResponse object.
                 return { text: response.text };
             } catch (error) {
                 console.error("Gemini Local Error:", error);
                 throw error;
             }
         } else {
-            // --- MODO PRODUCCIÓN (Vercel) ---
-            // Llamada a través de la Serverless Function para proteger la Key
+            // --- MODO PRODUCCIÓN (Proxy API) ---
             try {
                 const response = await fetch('/api/gemini', {
                     method: 'POST',

@@ -1,5 +1,5 @@
+// types.ts
 
-// FIX: Replaced file content with actual type definitions to resolve circular dependencies and missing exports.
 export interface AuthenticatedUser {
     token: string;
     schoolId: number;
@@ -8,6 +8,153 @@ export interface AuthenticatedUser {
     email: string;
     roleId: number;
 }
+
+export interface AuthResponse {
+    token: string;
+    user?: User;
+}
+
+export const ROLES = [
+    { id: 1, name: 'Estudiante' },
+    { id: 2, name: 'Profesor' },
+    { id: 3, name: 'Padre' },
+    { id: 6, name: 'Administrador' },
+    { id: 7, name: 'Super Admin' },
+    { id: 8, name: 'Coordinador' },
+    { id: 9, name: 'Jefe de Departamento' },
+    { id: 10, name: 'Auxiliar' },
+
+];
+
+export interface User {
+    userID: number;
+    userName: string;
+    email: string;
+    roleID: number;
+    schoolID: number;
+    cedula: string | null;
+    phoneNumber: string | null;
+    isBlocked: boolean;
+    blockedReason?: string;
+    blockedAt?: string;
+    sexo?: 'M' | 'F' | null;
+    classroomID?: number;
+    lugarNacimiento?: string;
+    baseSalary?: number;
+}
+
+// FIX: Added Teacher type
+export type Teacher = User;
+
+export interface AttendanceSummaryDto {
+    total: number;
+    present: number;
+    absent: number;
+    late: number;
+    justifiedAbsent: number;
+    observation: number;
+    attendanceRate: number;
+    absenceRate: number;
+}
+
+export interface ClassroomAttendanceStats {
+    classroomID: number;
+    classroomName: string;
+    overall: AttendanceSummaryDto;
+    byCourse: {
+        courseID: number;
+        courseName: string;
+        summary: AttendanceSummaryDto;
+    }[];
+    byStudent: {
+        studentID: number;
+        studentName: string;
+        summary: AttendanceSummaryDto;
+    }[];
+}
+
+export interface StudentAttendanceStats {
+    studentID: number;
+    studentName: string;
+    overall: AttendanceSummaryDto;
+    byCourse: {
+        courseID: number;
+        courseName: string;
+        summary: AttendanceSummaryDto;
+    }[];
+}
+
+export interface GenderStatItem {
+    sexo: 'M' | 'F';
+    total: number;
+    present: number;
+    absent: number;
+    late: number;
+    justifiedAbsent: number;
+    observation: number;
+}
+
+export interface GenderStatsResponse {
+    classroomID: number;
+    classroomName: string;
+    dateFrom?: string;
+    dateTo?: string;
+    genderStats: GenderStatItem[];
+}
+
+export interface Lapso {
+    lapsoID: number;
+    nombre: string;
+    fechaInicio: string;
+    fechaFin: string;
+    schoolID: number;
+}
+
+export interface Classroom {
+    classroomID: number;
+    name: string;
+    description: string;
+    schoolID: number;
+}
+
+export interface Course {
+    courseID: number;
+    name: string;
+    description: string;
+    schoolID: number;
+    userID: number;
+    // FIX: Added missing properties to Course interface
+    dayOfWeek?: string | null;
+    classroomID?: number | null;
+    additionalTeacherIDs?: string | number[] | null;
+}
+
+export interface DailyAttendanceDto {
+    date: string;
+    summary: AttendanceSummaryDto;
+}
+
+export interface DailyAttendanceStatsResponse {
+    dateFrom?: string;
+    dateTo?: string;
+    dailyStats: DailyAttendanceDto[];
+}
+
+export interface GlobalSearchResult {
+    users: User[];
+    courses: Course[];
+    // FIX: Explicitly type evaluations and extracurriculars
+    evaluations: Evaluation[];
+    classrooms: Classroom[];
+    extracurriculars: ExtracurricularActivity[];
+}
+
+export interface Student extends User {
+    studentID: number;
+    studentName: string;
+}
+
+// FIX: Added missing exported types used across the application
 
 export interface DashboardStats {
     totalUsers: number;
@@ -18,151 +165,38 @@ export interface DashboardStats {
     schoolName: string;
 }
 
-export interface User {
-    userID: number;
-    userName:string;
-    email: string;
-    phoneNumber: string | null;
-    cedula: string | null;
-    roleID: number;
-    schoolID: number;
-    isBlocked: boolean;
-    blockedReason?: string | null;
-    blockedAt?: string | null;
-    lugarNacimiento?: string;
-    classroomID?: number | null;
-}
-
-export interface UserDetails {
-    userID: number;
-    userName: string;
-    email: string;
-    cedula: string | null;
-    phoneNumber: string | null;
-    schoolID: number;
-    classroomID: number | null;
-    roleID: number;
-    isBlocked: boolean;
-    school: {
-        schoolID: number;
-        name: string;
-        address: string;
-        phone: string;
-        email: string;
-        schoolYear: string;
-    };
-    classroom: {
-        classroomID: number;
-        name: string;
-        description: string;
-        schoolID: number;
-    } | null;
-    role: {
-        roleID: number;
-        display: string;
-    };
-    enrollments: {
-        enrollmentID: number;
-        userID: number;
-        courseID: number;
-        course: {
-            courseID: number;
-            schoolID: number;
-            classroomID: number | null;
-        };
-    }[];
-    courses: any[];
-}
-
-
-export const ROLES = [
-    { id: 1, name: 'Estudiante' },
-    { id: 2, name: 'Profesor' },
-    { id: 3, name: 'Representante' },
-    { id: 6, name: 'Admin' },
-    { id: 7, name: 'Super Admin' },
-    { id: 8, name: 'Coordinador' },
-    { id: 9, name: 'Profesor Jefe' },
-    { id: 10, name: 'Profesor Auxiliar' },
-    { id: 11, name: 'Madre' }
-];
-
-export const BOLETA_LEVELS = [
-    "Sala 1",
-    "Sala 2",
-    "Sala 3",
-    "Primer Grado",
-    "Segundo Grado",
-    "Tercer Grado",
-    "Cuarto Grado",
-    "Quinto Grado",
-    "Sexto Grado"
-];
-
-export interface Course {
+export interface Evaluation {
+    evaluationID: number;
+    title: string;
+    description: string;
+    date: string;
     courseID: number;
-    name: string;
-    description: string;
-    userID: number; // teacher's user ID
-    teacherName?: string;
-    dayOfWeek: string | null;
-    additionalTeacherIDs?: number[] | string;
+    userID: number;
     schoolID: number;
-    // FIX: Add optional classroomID to align with its usage in AssignGradesPage.tsx.
-    classroomID?: number | null;
+    isVirtual: boolean;
+    virtualType?: number | null;
+    lapso?: Lapso;
+    course?: Course;
+    createdAt: string;
+    classroomID?: number;
 }
 
-export type Teacher = User;
-
-export interface Classroom {
-    classroomID: number;
-    name: string;
-    description: string;
+export interface Grade {
+    gradeID: number;
+    userID: number;
+    evaluationID: number;
+    courseID: number;
     schoolID: number;
-}
-
-export interface Student {
-    studentID: number;
-    studentName: string;
-}
-
-export interface AttendanceSummary {
-    total: number;
-    present: number;
-    absent: number;
-    late: number;
-    justifiedAbsent: number;
-    observation: number;
-}
-
-export interface CourseAttendance {
-    courseName: string;
-    summary: AttendanceSummary;
-}
-
-export interface StudentAttendance {
-    studentID: number;
-    studentName: string;
-    summary: AttendanceSummary;
-}
-
-export interface ClassroomAttendanceStats {
-    overall: AttendanceSummary;
-    byCourse: CourseAttendance[];
-    byStudent: StudentAttendance[];
-}
-
-export interface Lapso {
-    lapsoID: number;
-    nombre: string;
-    fechaInicio: string;
-    fechaFin: string;
+    gradeValue: number | null;
+    gradeText: string | null;
+    comments: string | null;
+    hasImage: boolean;
 }
 
 export interface StudentGradeItem {
     evaluacion: string;
-    displayGrade: string | number;
-    gradeValue?: number | null;
+    displayGrade: string;
+    gradeValue: number | null;
     date: string | null;
     comments: string;
 }
@@ -181,85 +215,34 @@ export interface StudentGradesVM {
 }
 
 export interface LapsoGradeApiItem {
-    course: { name: string } | null;
-    evaluation: { title: string, date: string | null } | null;
+    course: { name: string };
+    evaluation: { title: string, date: string };
     gradeValue: number | null;
     gradeText: string | null;
     comments: string | null;
-}
-
-export interface StudentAttendanceStats {
-    studentID: number;
-    studentName: string;
-    overall: AttendanceSummary;
-    byCourse: {
-        courseID: number;
-        courseName: string;
-        summary: AttendanceSummary;
-    }[];
-}
-
-export interface AuthResponse {
-    token: string;
-}
-
-export interface Evaluation {
-    evaluationID: number;
-    title: string;
-    description: string;
-    date: string;
-    courseID: number;
-    course?: { name: string };
-    lapso?: Lapso;
-    userID: number;
-    schoolID: number;
-    classroomID?: number | null;
-    createdAt: string;
-    lapsoID?: number | null;
-    isVirtual?: boolean; // Added for Virtual Classroom
-    virtualType?: number; // 1: Content, 2: Selection, 3: Task
-}
-
-export interface Grade {
-    gradeID: number;
-    userID: number;
-    courseID: number;
-    evaluationID: number;
-    schoolID: number;
-    gradeValue: number | null;
-    gradeText: string | null;
-    comments: string | null;
-    hasImage: boolean;
-}
-
-export interface StudentGradeData {
-    userID: number;
-    userName: string;
-    gradeValue: string;
-    gradeText: string;
-    comments: string;
 }
 
 export interface Child {
-    relationID: number;
     userID: number;
     userName: string;
     email: string;
+    relationID: number;
 }
 
 export interface Parent {
-    relationID: number;
     userID: number;
     userName: string;
     email: string;
+    relationID: number;
 }
 
 export interface LoginHistoryRecord {
     historyID: number;
+    userID: number;
     userName: string;
     loginTime: string;
     loginSuccess: boolean;
-    loginMessage: string | null;
+    loginMessage: string;
 }
 
 export enum PaymentStatus {
@@ -270,27 +253,29 @@ export enum PaymentStatus {
 
 export enum PaymentMethod {
     PagoMovil = 'PagoMovil',
-    Transfer = 'Transfer'
+    Transfer = 'Transfer',
+    Cash = 'Cash',
+    Other = 'Other'
 }
 
 export interface Payment {
     paymentID: number;
-    createdAt: string;
     amount: number;
     currency: string;
-    referenceNumber: string | null;
-    status: PaymentStatus;
     method: PaymentMethod;
-    pm_CedulaRif?: string | null;
-    pm_Phone?: string | null;
-    pm_BankOrigin?: string | null;
-    pm_BankDest?: string | null;
-    tr_CedulaRif?: string | null;
-    tr_FullName?: string | null;
-    tr_BankDest?: string | null;
-    tr_AccountNumber?: string | null;
-    invoiceID?: number | null;
-    notes?: string | null;
+    status: PaymentStatus;
+    referenceNumber?: string;
+    notes?: string;
+    createdAt: string;
+    invoiceID?: number;
+    pm_CedulaRif?: string;
+    pm_Phone?: string;
+    pm_BankOrigin?: string;
+    pm_BankDest?: string;
+    tr_CedulaRif?: string;
+    tr_FullName?: string;
+    tr_BankDest?: string;
+    tr_AccountNumber?: string;
 }
 
 export interface Notification {
@@ -299,40 +284,7 @@ export interface Notification {
     content: string;
     date: string;
     isRead: boolean;
-}
-
-export interface ReportEmgRow {
-    nro: number;
-    cedula: string;
-    nombreCompleto: string;
-    lugarNac: string | null;
-    sexo: 'M' | 'F' | null;
-    diaNac?: string;
-    mesNac?: string;
-    anioNac?: string;
-    subjectCells: (string | number)[];
-    grupo: string | null;
-}
-
-export interface ReportEmgClassroomResponse {
-    entity: string;
-    mesAnio: string;
-    schoolCode: string;
-    schoolName: string;
-    address: string;
-    municipality: string;
-    phone: string;
-    director: string;
-    directorCI: string;
-    subjectColumns: string[];
-    rows: ReportEmgRow[];
-    anioEscolar?: string;
-    tipoEvaluacion?: string;
-    inscritos?: number;
-    inasistentes?: number;
-    aprobados?: number;
-    noAprobados?: number;
-    noCursantes?: number;
+    userID: number;
 }
 
 export interface ExtracurricularActivity {
@@ -340,34 +292,29 @@ export interface ExtracurricularActivity {
     name: string;
     description: string;
     dayOfWeek: number;
-    userID: number | null; // Teacher ID
     schoolID: number;
+    userID: number | null;
+}
+
+export interface EnrolledStudent {
+    userID: number;
+    studentName: string;
 }
 
 export interface Certificate {
     certificateId: number;
     userId: number;
-    studentName: string;
+    studentName?: string;
     certificateType: string;
-    issueDate: string;
+    signatoryName: string;
+    signatoryTitle: string;
     content: string;
-    signatoryName?: string; // Made optional
-    signatoryTitle?: string; // Made optional
     schoolId: number;
+    issueDate: string;
     schoolName?: string;
     schoolCode?: string;
     address?: string;
     phones?: string;
-}
-
-export interface CertificateGeneratePayload {
-    userId: number;
-    certificateType: string;
-    signatoryName?: string;
-    signatoryTitle?: string;
-    content: string;
-    schoolId: number;
-    issueDate?: string;
 }
 
 export interface Product {
@@ -378,15 +325,15 @@ export interface Product {
     costPrice: number;
     salePrice: number;
     isActive: boolean;
-    createdAt: string;
     schoolID: number;
-    trackInventory?: boolean;
 }
 
 export interface ProductAudience {
     productAudienceID: number;
-    targetTypeRaw: string | null; // "All", "Role", "User", "Classroom"
+    productID: number;
+    targetType: string;
     targetID: number | null;
+    targetTypeRaw?: string;
 }
 
 export interface ProductWithAudiences {
@@ -395,7 +342,7 @@ export interface ProductWithAudiences {
 }
 
 export interface AudiencePayload {
-    targetType: string;
+    targetType: 'All' | 'Role' | 'User' | 'Classroom';
     targetID: number | null;
 }
 
@@ -403,73 +350,52 @@ export interface Enrollment {
     enrollmentID: number;
     userID: number;
     courseID: number;
-    courseName: string;
+    schoolID: number;
     enrollmentDate: string;
+    courseName?: string;
 }
 
-export interface ReportRrdeaClassroomResponse {
-    planEstudio: string;
-    planCodigo: string;
-    anioEscolar: string;
-    mesAnio: string;
-    plantelCodigo: string;
-    plantelNombre: string;
-    direccion: string;
-    telefono: string;
-    municipio: string;
-    entidad: string;
-    distritoEscolar: string;
-    cdcee: string;
-    grado: string;
-    seccion: string;
-    numeroEstudiantesSeccion: number;
-    numeroEstudiantesEnPagina: number;
-    totalA: number;
-    totalB: number;
-    totalC: number;
-    totalD: number;
-    totalE: number;
-    totalP: number;
-    rows: {
-        apellidosNombres: string;
-        cedula: string;
-        lugarNac: string;
-        efEdo: string;
-        sexo: string;
-        diaNac: string;
-        mesNac: string;
-        anioNac: string;
-        resultado: string;
-    }[];
+export interface UserDetails {
+    userID: number;
+    userName: string;
+    email: string;
+    cedula: string | null;
+    phoneNumber: string | null;
+    roleID: number;
+    isBlocked: boolean;
+    school: { name: string, schoolYear: string };
+    classroom?: { classroomID: number, name: string };
+    enrollments: Enrollment[];
 }
 
 export interface AttendanceRecord {
     attendanceID: number;
+    studentName: string;
     date: string;
     status: string;
     isJustified: boolean | null;
     minutesLate: number | null;
     notes: string | null;
-    studentName: string;
-    courseName: string;
 }
 
 export interface AttendanceEditPayload {
     status: string;
+    date: string;
     isJustified?: boolean;
     minutesLate?: number;
     notes?: string;
 }
 
-export interface ExtracurricularEnrollmentPayload {
+export interface AttendanceUpsertDto {
     UserID: number;
-    ActivityID: number;
+    RelatedUserID: number;
+    CourseID: number;
     SchoolID: number;
-}
-
-export interface EnrolledStudent {
-    userID: number;
-    studentName: string;
+    Status: string;
+    Notes: string | null;
+    IsJustified: boolean;
+    MinutesLate: number | null;
+    Date: string;
 }
 
 export interface ClassroomAverage {
@@ -479,37 +405,32 @@ export interface ClassroomAverage {
 }
 
 export interface ClassroomStudentAveragesResponse {
-    classroomId: number;
+    classroomID: number;
     classroomName: string;
-    studentAverages: {
-        studentId: number;
-        studentName: string;
-        averageGrade: number;
-        totalGrades: number;
-    }[];
+    studentAverages: { studentId: number, studentName: string, averageGrade: number, totalGrades: number }[];
 }
 
 export interface MedicalInfo {
     medicalInfoID: number;
     userID: number;
-    bloodType: string | null;
-    allergies: string | null;
-    chronicConditions: string | null;
-    medications: string | null;
-    emergencyContactName: string | null;
-    emergencyContactPhone: string | null;
-    notes: string | null;
+    bloodType: string;
+    allergies: string;
+    chronicConditions: string;
+    medications: string;
+    emergencyContactName: string;
+    emergencyContactPhone: string;
+    notes: string;
 }
 
 export interface ApprovePaymentResponse {
-    message: string;
-    invoiceId: number | null;
+    success: boolean;
+    invoiceId?: number;
 }
 
-export interface InvoiceLinePrintVM {
+export interface InvoiceLineVM {
     invoiceLineID: number;
-    descripcion: string;
     cantidad: number;
+    descripcion: string;
     precioUnitario: number;
     descuento: number;
     tasaIva: number;
@@ -520,7 +441,6 @@ export interface InvoiceLinePrintVM {
 
 export interface InvoicePrintVM {
     invoiceID: number;
-    schoolName: string;
     numeroFactura: string;
     numeroControl: string;
     serie: string;
@@ -528,147 +448,113 @@ export interface InvoicePrintVM {
     condicionPago: string;
     moneda: string;
     status: string;
+    schoolName: string;
     clienteNombre: string;
     clienteRifCedula: string;
-    clienteDireccionFiscal: string | null;
-    clienteTelefono: string | null;
+    clienteDireccionFiscal?: string;
+    clienteTelefono?: string;
+    lines: InvoiceLineVM[];
     subtotal: number;
     descuentoTotal: number;
     baseImponible: number;
-    exento: number;
     montoIva: number;
+    exento: number;
     totalGeneral: number;
-    lines: InvoiceLinePrintVM[];
 }
 
 export interface PendingInvoice {
     invoiceID: number;
-    schoolID: number;
     numeroFactura: string;
-    fechaEmision: string;
     clienteNombre: string;
+    fechaEmision: string;
     totalGeneral: number;
 }
 
 export interface PaginatedInvoices {
+    items: PendingInvoice[];
     total: number;
     page: number;
     pageSize: number;
-    items: {
-        invoiceID: number;
-        numeroFactura: string;
-        clienteNombre: string;
-        fechaEmision: string;
-        status: string;
-        totalGeneral: number;
-    }[];
 }
 
 export interface GenerateInvoicesRunDto {
     TargetYear: number;
     TargetMonth: number;
-    SchoolID: number;
     ProductID: number;
     TasaIva: number;
     Cantidad: number;
     Serie: string;
     Moneda: string;
     CondicionPago: string;
+    SchoolID: number;
     DryRun: boolean;
 }
 
 export interface MonthlyGenerationResult {
     message: string;
+    error?: string;
     dryRun: boolean;
-    target: {
-        targetYear: number;
-        targetMonth: number;
-        schoolID: number;
-        productID: number;
-    };
     candidatos: number;
     facturasGeneradas: number;
-    error?: string;
 }
 
 export interface MonthlyARSummary {
-    schoolID: number;
     periodYear: number;
     periodMonth: number;
-    currency: string;
-    totalInvoices: number;
-    openInvoices: number;
-    pendingInvoices: number;
     totalBilled: number;
+    totalInvoices: number;
     totalCollected: number;
-    invoicesWithAR: number;
+    pendingInvoices: number;
     accountsReceivable: number;
 }
 
-// Purchases Module Types
-export interface PurchaseLineCreate {
-    productID: number;
-    descripcion: string;
-    cantidad: number;
-    unitCost: number;
-    taxRate: number;
+export interface PurchaseListItem {
+    purchaseID: number;
+    supplierName: string;
+    fecha: string;
+    status: string;
+    totalGeneral: number;
+    moneda: string;
+}
+
+export interface PaginatedPurchases {
+    items: PurchaseListItem[];
+    total: number;
+    page: number;
+    pageSize: number;
 }
 
 export interface PurchaseCreatePayload {
-    schoolID: number;
     supplierName: string;
     supplierRif: string;
     fecha: string;
     moneda: string;
     condicionPago: string;
     serie: string;
-    createdByUserID: number;
-    lines: PurchaseLineCreate[];
-}
-
-export interface PurchaseListItem {
-    purchaseID: number;
     schoolID: number;
-    fecha: string;
-    supplierName: string;
-    supplierRif: string;
-    subtotal: number;
-    montoIva: number;
-    totalGeneral: number;
-    status: 'Issued' | 'Annulled' | 'Paid';
-    moneda: string;
-    serie: string;
-}
-
-export interface PaginatedPurchases {
-    total: number;
-    page: number;
-    pageSize: number;
-    items: PurchaseListItem[];
+    createdByUserID: number;
+    lines: { productID: number, descripcion: string, cantidad: number, unitCost: number, taxRate: number }[];
 }
 
 export interface PurchaseHeader {
     purchaseID: number;
-    schoolID: number;
-    fecha: string;
     supplierName: string;
     supplierRif: string;
+    fecha: string;
+    status: string;
     subtotal: number;
     montoIva: number;
     totalGeneral: number;
-    status: string;
     moneda: string;
     serie: string;
 }
 
-export interface PurchaseLineDetail {
+export interface PurchaseLine {
     purchaseLineID: number;
-    purchaseID: number;
     productID: number;
     descripcion: string;
     cantidad: number;
     unitCost: number;
-    taxRate: number;
     montoBase: number;
     montoIva: number;
     totalLinea: number;
@@ -676,43 +562,38 @@ export interface PurchaseLineDetail {
 
 export interface PurchaseDetail {
     header: PurchaseHeader;
-    lines: PurchaseLineDetail[];
+    lines: PurchaseLine[];
 }
 
 export interface PurchaseCreationResponse {
-    purchaseId: number;
+    success: boolean;
+    purchaseID: number;
 }
 
-// Payroll Module Types
 export interface PayrollRunPayload {
-  schoolID: number;
-  periodYear: number;
-  periodMonth: number;
-  transportAllow: number;
-  ISRPercent: number;
-  pensionPercent: number;
-  notes: string | null;
-  createdByUserID: number | null;
-  dryRun: boolean;
-  forceRegen?: boolean;
-}
-
-export interface PayrollPreviewResponse {
-  dryRun: boolean;
-  target: {
-    schoolID: number;
     periodYear: number;
     periodMonth: number;
-  };
-  summary: {
-    employees: number;
-    gross: number;
-    ded: number;
-    net: number;
-  };
-  periodId: number | null;
-  payrollId: number | null;
-  detail: {
+    transportAllow: number;
+    isrPercent: number;
+    pensionPercent: number;
+    notes: string;
+    schoolID: number;
+    createdByUserID: number;
+    dryRun: boolean;
+    exchangeRate: number;
+    isUsd: boolean;
+    customAllowances: { name: string; amount: number; isUsd: boolean }[];
+    employeeBonuses?: { userId: number; amount: number }[]; // Keeping for legacy if needed, but new logic uses employeesDetails
+    employeesDetails?: {
+        employeeUserID: number;
+        baseSalary: number;
+        individualAllowance: number;
+        allowanceNote?: string; // Concatenated description of bonuses
+        isSelected: boolean;
+    }[];
+}
+
+export interface PayrollLinePreview {
     employeeUserID: number;
     employeeName: string;
     baseAmount: number;
@@ -722,30 +603,20 @@ export interface PayrollPreviewResponse {
     pension: number;
     otherDed: number;
     netPay: number;
-  }[];
+}
+
+export interface PayrollPreviewResponse {
+    summary: { employees: number, gross: number, ded: number, net: number };
+    detail: PayrollLinePreview[];
 }
 
 export interface PayrollRunResponse {
-  dryRun: boolean;
-  target: {
-    schoolID: number;
-    periodYear: number;
-    periodMonth: number;
-  };
-  summary: {
-    employees: number;
-    gross: number;
-    ded: number;
-    net: number;
-  };
-  periodId: number;
-  payrollId: number;
+    success: boolean;
+    payrollId: number;
 }
 
-
-export interface PayrollListItem {
+export interface PayrollSummary {
     payrollID: number;
-    schoolID: number;
     periodYear: number;
     periodMonth: number;
     employees: number;
@@ -754,52 +625,32 @@ export interface PayrollListItem {
     netTotal: number;
     status: string;
     createdAt: string;
-    notes: string | null;
 }
 
 export interface PaginatedPayrolls {
+    items: PayrollSummary[];
     total: number;
     page: number;
     pageSize: number;
-    items: PayrollListItem[];
-}
-
-export interface PayrollHeader {
-    payrollID: number;
-    schoolID: number;
-    periodYear: number;
-    periodMonth: number;
-    employees: number;
-    grossTotal: number;
-    deductionsTotal: number;
-    netTotal: number;
-    status: string;
-    createdAt: string;
-    notes: string | null;
 }
 
 export interface PayrollLine {
     payrollLineID: number;
-    payrollID: number;
-    schoolID: number;
-    periodYear: number;
-    periodMonth: number;
     employeeUserID: number;
     employeeName: string;
     roleID: number;
     baseAmount: number;
     transportAllow: number;
     otherAllow: number;
-    isr: number; // ISR deduction
+    isr: number;
     pension: number;
     otherDed: number;
     netPay: number;
 }
 
-
 export interface PayrollDetail {
-  header: PayrollHeader;
-  lines: PayrollLine[];
+    header: PayrollSummary;
+    lines: PayrollLine[];
 }
 
 export interface BaseSalaryUpdatePayload {
@@ -807,32 +658,20 @@ export interface BaseSalaryUpdatePayload {
     baseSalary: number;
 }
 
-// Chat Module Types
+export interface Chat {
+    chatID: number;
+    name: string;
+    isGroupChat: boolean;
+    participants: { userID: number, user?: User }[];
+}
+
 export interface Message {
     messageID: number;
     chatID: number;
     senderID: number;
     content: string;
     timestamp: string;
-    isRead: boolean;
-    sender?: User; 
-}
-
-export interface ChatParticipant {
-    chatParticipantID: number;
-    chatID: number;
-    userID: number;
-    joinedAt: string;
-    user?: User;
-}
-
-export interface Chat {
-    chatID: number;
-    name: string;
-    schoolID: number;
-    isGroupChat: boolean;
-    createdAt: string;
-    participants: ChatParticipant[];
+    sender?: User;
 }
 
 export interface CreateGroupChatDto {
@@ -847,26 +686,27 @@ export interface SendMessageDto {
     Content: string;
 }
 
-// Analytics Module Types
-export interface PnlMonthlyData {
-    month: number;
+export interface PnlReportResponseItem {
     year: number;
+    month: number;
     income: number;
     cogs: number;
     expenses: number;
     netProfit: number;
 }
-export type PnlReportResponse = PnlMonthlyData[];
 
-export interface SalesByProductData {
+export type PnlReportResponse = PnlReportResponseItem[];
+
+export interface SalesByProductResponseItem {
     productName: string;
     quantitySold: number;
     totalSales: number;
     margin: number;
 }
-export type SalesByProductResponse = SalesByProductData[];
 
-export interface InventorySnapshotData {
+export type SalesByProductResponse = SalesByProductResponseItem[];
+
+export interface InventorySnapshotResponseItem {
     productName: string;
     sku: string;
     quantity: number;
@@ -875,16 +715,18 @@ export interface InventorySnapshotData {
     totalCostValue: number;
     totalSaleValue: number;
 }
-export type InventorySnapshotResponse = InventorySnapshotData[];
 
-export interface InventoryKardexData {
+export type InventorySnapshotResponse = InventorySnapshotResponseItem[];
+
+export interface InventoryKardexResponseItem {
     date: string;
     movementType: string;
     quantity: number;
     relatedDocument: string;
     resultingBalance: number;
 }
-export type InventoryKardexResponse = InventoryKardexData[];
+
+export type InventoryKardexResponse = InventoryKardexResponseItem[];
 
 export interface ArAgingSummaryResponse {
     bucket_0_30: number;
@@ -894,7 +736,7 @@ export interface ArAgingSummaryResponse {
     total: number;
 }
 
-export interface ArAgingByCustomerData {
+export interface ArAgingByCustomerResponseItem {
     customerName: string;
     bucket_0_30: number;
     bucket_31_60: number;
@@ -902,151 +744,128 @@ export interface ArAgingByCustomerData {
     bucket_90p: number;
     total: number;
 }
-export type ArAgingByCustomerResponse = ArAgingByCustomerData[];
 
-// GL Module Types
-export type ApiError = { message: string; error?: string; inner?: string };
+export type ArAgingByCustomerResponse = ArAgingByCustomerResponseItem[];
 
 export interface TrialBalanceRow {
-  schoolID: number;
-  accountCode: string;
-  accountName: string;
-  accountType: 'Asset'|'Liability'|'Equity'|'Revenue'|'Expense'|'COGS'|'TaxDebit'|'TaxCredit'|string;
-  totalDebit: number;
-  totalCredit: number;
-  net: number;
+    accountCode: string;
+    accountName: string;
+    accountType: string;
+    totalDebit: number;
+    totalCredit: number;
+    net: number;
 }
 
 export interface LedgerRow {
-  schoolID: number;
-  journalDate: string; // ISO
-  journalID: number;
-  lineNo: number;
-  accountCode: string;
-  debit: number;
-  credit: number;
-  memo?: string;
-  sourceCode?: string;
-  sourceID?: number;
+    journalDate: string;
+    journalID: number;
+    lineNo: number;
+    memo: string;
+    sourceCode: string;
+    sourceID: number;
+    debit: number;
+    credit: number;
 }
 
 export interface IncomeStatement {
-  period: { from: string; to: string };
-  revenue: number;
-  cogs: number;
-  expenses: number;
-  grossProfit: number;
-  netIncome: number;
+    revenue: number;
+    cogs: number;
+    grossProfit: number;
+    expenses: number;
+    netIncome: number;
 }
 
 export interface BalanceSheet {
-  asOf: string;
-  assets: number;
-  liabilities: number;
-  equity: number;
-  balance: number; // debe ser 0
+    assets: number;
+    liabilities: number;
+    equity: number;
 }
-
-// Withholdings Module Types
 
 export interface WithholdingType {
-  withholdingTypeID: number;
-  name: string;
-  description: string;
-}
-
-export interface GenerateWithholdingPayload {
-  purchaseID: number;
-  withholdingTypeID: number;
-  ratePercent: number;
-  issueDate: string;
-  createdByUserID: number;
-}
-
-export interface GenerateWithholdingResponse {
-  withholdingID: number;
-  amountWithheld: number;
+    withholdingTypeID: number;
+    name: string;
 }
 
 export interface WithholdingListItem {
-  withholdingID: number;
-  schoolID: number;
-  withholdingTypeID: number;
-  sourceTable: string;
-  sourceID: number;
-  issueDate: string;
-  periodYear: number;
-  periodMonth: number;
-  agentRifCedula: string;
-  agentName: string;
-  subjectRifCedula: string;
-  subjectName: string;
-  totalBase: number;
-  totalWithheld: number;
-  status: 'Active' | 'Annulled';
-  typeName?: string; // Client-side addition
+    withholdingID: number;
+    issueDate: string;
+    withholdingTypeID: number;
+    subjectName: string;
+    subjectRifCedula: string;
+    totalBase: number;
+    totalWithheld: number;
+    status: string;
+    typeName?: string;
 }
 
 export interface WithholdingHeader {
-  withholdingID: number;
-  schoolID: number;
-  withholdingTypeID: number;
-  issueDate: string;
-  agentName: string;
-  subjectName: string;
-  totalBase: number;
-  totalWithheld: number;
-  status: 'Active' | 'Annulled';
+    withholdingID: number;
+    agentName: string;
+    subjectName: string;
+    issueDate: string;
+    status: string;
+    totalBase: number;
+    totalWithheld: number;
 }
 
 export interface WithholdingLine {
-  withholdingLineID: number;
-  withholdingID: number;
-  conceptCode: string;
-  description: string;
-  baseAmount: number;
-  ratePercent: number;
-  amountWithheld: number;
+    withholdingLineID: number;
+    description: string;
+    baseAmount: number;
+    ratePercent: number;
+    amountWithheld: number;
 }
 
 export interface WithholdingDetail {
-  header: WithholdingHeader;
-  lines: WithholdingLine[];
+    header: WithholdingHeader;
+    lines: WithholdingLine[];
 }
 
-export interface Indicator {
-    text: string;
+export interface GenerateWithholdingPayload {
+    purchaseID: number;
+    withholdingTypeID: number;
+    ratePercent: number;
+    issueDate: string;
+    createdByUserID: number;
 }
 
-export interface IndicatorSection {
-    title: string;
-    indicators: Indicator[];
-    hasRecommendations?: boolean;
+export interface CertificateGeneratePayload {
+    certificateType: string;
+    studentID: number;
+    schoolId: number;
+    signatoryName: string;
+    signatoryTitle: string;
+    content: string;
+    issueDate?: string;
 }
 
-export interface GlobalSearchResult {
-    users: User[];
-    courses: Course[];
-    evaluations: Evaluation[];
-    classrooms: Classroom[];
-    extracurriculars: ExtracurricularActivity[];
+export interface ExtracurricularEnrollmentPayload {
+    activityID: number;
+    userID: number;
+    schoolID: number;
 }
 
-// --- VIRTUAL CLASSROOM & CONTENT TYPES ---
-
-export interface QuestionOption {
-    optionID: number;
-    optionText: string;
-    isCorrect: boolean;
+export interface GenerateWithholdingResponse {
+    success: boolean;
+    withholdingID: number;
+    message?: string;
 }
 
 export interface Question {
     questionID: number;
+    evaluationID: number;
     questionText: string;
-    questionType: 1 | 2 | 3; // 1: Open, 2: Multiple, 3: Task
+    questionType: 1 | 2 | 3;
     points: number;
     orderIndex: number;
     options?: QuestionOption[];
+}
+
+export interface QuestionOption {
+    optionID: number;
+    questionID: number;
+    optionText: string;
+    isCorrect: boolean;
 }
 
 export interface TakeExamEvaluation {
@@ -1056,30 +875,14 @@ export interface TakeExamEvaluation {
     questions: Question[];
 }
 
-export interface AnswerPayload {
-    questionID: number;
-    selectedOptionID?: number | null;
-    answerText?: string | null;
-}
-
 export interface EvaluationQnA {
     qnaID: number;
+    evaluationID: number;
+    askedByUserId: number;
     questionText: string;
     answerText: string | null;
     createdAt: string;
     answeredAt: string | null;
-    askedByUserId: number;
-}
-
-export interface SubmittedAnswer {
-    questionID: number;
-    questionText: string;
-    questionType: number;
-    points: number;
-    answerText: string | null;
-    selectedOptionID: number | null;
-    selectedOptionText: string | null;
-    isCorrect?: boolean;
 }
 
 export interface StudentSubmission {
@@ -1088,13 +891,7 @@ export interface StudentSubmission {
     studentName: string;
     submittedAt: string;
     grade: number | null;
-    answers: SubmittedAnswer[];
-}
-
-// New Types for Detailed Submission
-export interface QuestionAnswerDetailOption {
-    optionID: number;
-    optionText: string;
+    answers: any[];
 }
 
 export interface QuestionAnswerDetail {
@@ -1102,55 +899,128 @@ export interface QuestionAnswerDetail {
     questionText: string;
     questionType: number;
     points: number;
-    orderIndex: number;
-    options: QuestionAnswerDetailOption[];
-    selectedOptionID?: number | null;
-    selectedOptionText?: string | null;
-    answerText?: string | null;
-    isCorrect?: boolean | null;
+    answerText: string | null;
+    selectedOptionText: string | null;
+    isCorrect: boolean;
+    options?: QuestionOption[];
 }
 
 export interface ExamSubmissionDetail {
-    evaluationID: number;
-    userID: number;
+    submissionID: number;
+    studentID: number;
     studentName: string;
-    submittedAt: string;
     questions: QuestionAnswerDetail[];
 }
 
-// Content Types
 export enum ContentType {
-  Text = 1,
-  File = 2,
-  Video = 3
+    Text = 1,
+    File = 2,
+    Video = 3
 }
 
 export interface EvaluationContentFile {
-  fileID: number;
-  fileName: string;
-  fileUrl: string;
-  fileType: string;
-  fileSizeBytes: number;
+    fileID: number;
+    contentID: number;
+    fileName: string;
+    fileUrl: string;
+    fileType: string;
+    fileSizeBytes: number;
 }
 
 export interface EvaluationContent {
-  contentID: number;
-  evaluationID: number;
-  title: string;
-  description: string | null;
-  contentType: ContentType;
-  textBody: string | null;
-  orderIndex: number;
-  isPublic: boolean;
-  createdAt: string;
-  files: EvaluationContentFile[];
+    contentID: number;
+    evaluationID: number;
+    title: string;
+    description: string | null;
+    contentType: ContentType;
+    textBody: string | null;
+    orderIndex: number;
+    isPublic: boolean;
+    files?: EvaluationContentFile[];
 }
 
 export interface CreateContentDTO {
-  title: string;
-  description?: string;
-  contentType: ContentType;
-  textBody?: string;
-  orderIndex: number;
-  isPublic: boolean;
+    title: string;
+    description: string;
+    contentType: ContentType;
+    textBody?: string;
+    orderIndex: number;
+    isPublic: boolean;
+}
+
+export interface AnswerPayload {
+    questionID: number;
+    answerText: string | null;
+    selectedOptionID: number | null;
+}
+
+export interface IndicatorSection {
+    title: string;
+    indicators: { text: string }[];
+    hasRecommendations?: boolean;
+}
+
+export interface ReportEmgClassroomResponse {
+    schoolName: string;
+    entity: string;
+    mesAnio: string;
+    schoolCode: string;
+    address: string;
+    phone: string;
+    municipality: string;
+    director: string;
+    directorCI: string;
+    rows: any[];
+    subjectColumns: string[];
+    anioEscolar: string;
+    tipoEvaluacion: string;
+    inscritos: number;
+    inasistentes: number;
+    aprobados: number;
+    noAprobados: number;
+    noCursantes: number;
+}
+
+export interface ReportRrdeaClassroomResponse {
+    planEstudio: string;
+    planCodigo: string;
+    anioEscolar: string;
+    mesAnio: string;
+    plantelCodigo: string;
+    plantelNombre: string;
+    distritoEscolar: string;
+    direccion: string;
+    telefono: string;
+    municipality?: string;
+    municipio: string;
+    entidad: string;
+    cdcee: string;
+    grado: string;
+    seccion: string;
+    numeroEstudiantesSeccion: number;
+    numeroEstudiantesEnPagina: number;
+    rows: any[];
+    totalA: number;
+    totalB: number;
+    totalC: number;
+    totalD: number;
+    totalE: number;
+    totalP: number;
+}
+
+// FIX: Added missing constant exported as a type member
+export const BOLETA_LEVELS = [
+    "Sala 1", "Sala 2", "Sala 3",
+    "Primer Grado", "Segundo Grado", "Tercer Grado",
+    "Cuarto Grado", "Quinto Grado", "Sexto Grado"
+];
+
+export interface ExchangeRate {
+    rateID: number;
+    rate: number;
+    currencyFrom: string;
+    currencyTo: string;
+    date: string;
+    isActive: boolean;
+    schoolID: number;
 }

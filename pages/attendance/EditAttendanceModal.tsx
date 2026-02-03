@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { apiService } from '../../services/apiService';
@@ -18,9 +19,14 @@ const EditAttendanceModal: React.FC<EditAttendanceModalProps> = ({ record, onClo
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
+    // FIX: Extraemos la fecha directamente del string en lugar de pasar por toISOString() 
+    // para evitar el desfase de zona horaria.
+    const initialDate = record.date ? record.date.split('T')[0] : '';
+
     const { register, handleSubmit, watch, formState: { errors } } = useForm<AttendanceEditPayload>({
         defaultValues: {
             status: record.status,
+            date: initialDate,
             isJustified: record.isJustified ?? false,
             minutesLate: record.minutesLate ?? 0,
             notes: record.notes ?? ''
@@ -38,7 +44,11 @@ const EditAttendanceModal: React.FC<EditAttendanceModalProps> = ({ record, onClo
         setError('');
         setLoading(true);
 
-        const payload: AttendanceEditPayload = { status: data.status };
+        const payload: AttendanceEditPayload = { 
+            status: data.status,
+            date: data.date 
+        };
+
         if (data.status === 'Retardo') {
             payload.minutesLate = Number(data.minutesLate);
             payload.isJustified = data.isJustified;
@@ -65,11 +75,19 @@ const EditAttendanceModal: React.FC<EditAttendanceModalProps> = ({ record, onClo
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 {error && <p className="bg-danger-light text-danger p-3 rounded">{error}</p>}
                 
-                <p className="text-sm">Fecha: {new Date(record.date).toLocaleDateString('es-ES')}</p>
+                <div>
+                    <label className="block text-sm font-medium">Fecha de Asistencia</label>
+                    <input 
+                        type="date" 
+                        {...register('date', { required: 'La fecha es obligatoria' })} 
+                        className="mt-1 block w-full p-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent/50" 
+                    />
+                    {errors.date && <p className="text-danger text-xs mt-1">{errors.date.message}</p>}
+                </div>
 
                 <div>
                     <label className="block text-sm font-medium">Estado</label>
-                    <select {...register('status', { required: true })} className="mt-1 block w-full p-2 border border-border rounded-md">
+                    <select {...register('status', { required: true })} className="mt-1 block w-full p-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent/50">
                         {allowedStatuses.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>

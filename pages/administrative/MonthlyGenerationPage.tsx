@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
+import { useLocation } from 'react-router-dom';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
 import { Product, MonthlyGenerationResult, MonthlyARSummary } from '../../types';
@@ -19,15 +20,16 @@ type FormInputs = {
 const MonthlyGenerationPage: React.FC = () => {
     // State management
     const { user } = useAuth();
+    const location = useLocation();
     const [products, setProducts] = useState<Product[]>([]);
     const [summary, setSummary] = useState<MonthlyARSummary[]>([]);
     const [loading, setLoading] = useState({ products: true, summary: true });
     const [error, setError] = useState('');
     const [generationResult, setGenerationResult] = useState<MonthlyGenerationResult | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
-    
+
     // Form management
-    const { register, handleSubmit, formState: { errors } } = useForm<FormInputs>({
+    const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormInputs>({
         defaultValues: {
             TargetYear: new Date().getFullYear(),
             TargetMonth: new Date().getMonth() + 1,
@@ -46,9 +48,9 @@ const MonthlyGenerationPage: React.FC = () => {
             const summaryData = await apiService.getMonthlyArSummary(user.schoolId);
             setSummary(summaryData);
         } catch {
-             setError('No se pudo cargar el resumen mensual.');
+            setError('No se pudo cargar el resumen mensual.');
         } finally {
-             setLoading(p => ({ ...p, summary: false }));
+            setLoading(p => ({ ...p, summary: false }));
         }
     }
 
@@ -58,13 +60,26 @@ const MonthlyGenerationPage: React.FC = () => {
             // Fetch products
             setLoading(p => ({ ...p, products: true }));
             apiService.getProductsWithAudiences(user.schoolId)
-                .then(data => setProducts(data.map(p => p.product)))
+                .then(data => {
+                    const loadedProducts = data.map(p => p.product);
+                    setProducts(loadedProducts);
+
+                    // Pre-select product if passed in state
+                    const stateProductId = location.state?.productID;
+                    if (stateProductId) {
+                        // Verify it exists in the loaded list
+                        const exists = loadedProducts.find(p => p.productID === stateProductId);
+                        if (exists) {
+                            setValue('ProductID', stateProductId);
+                        }
+                    }
+                })
                 .catch(() => setError('No se pudieron cargar los productos.'))
                 .finally(() => setLoading(p => ({ ...p, products: false })));
-            
+
             fetchSummary();
         }
-    }, [user]);
+    }, [user, location.state, setValue]);
 
     // Handlers
     const handleGeneration = async (data: FormInputs, dryRun: boolean) => {
@@ -72,7 +87,9 @@ const MonthlyGenerationPage: React.FC = () => {
         setIsGenerating(true);
         setGenerationResult(null);
         setError('');
-        
+
+        console.log('Sending payload:', { ...data, SchoolID: user.schoolId, DryRun: dryRun });
+
         try {
             const result = await apiService.generateMonthly({
                 ...data,
@@ -90,7 +107,7 @@ const MonthlyGenerationPage: React.FC = () => {
             setIsGenerating(false);
         }
     };
-    
+
     const onPreview: SubmitHandler<FormInputs> = (data) => handleGeneration(data, true);
     const onRun: SubmitHandler<FormInputs> = (data) => {
         if (window.confirm(`¿Está seguro de que desea generar ${generationResult?.candidatos || 'varias'} facturas para ${data.TargetMonth}/${data.TargetYear}? Esta acción no se puede deshacer.`)) {
@@ -132,7 +149,12 @@ const MonthlyGenerationPage: React.FC = () => {
                         <div>
                             <label className="block text-sm font-medium">Producto a Facturar</label>
                             <select {...register('ProductID', { required: 'Producto es requerido', valueAsNumber: true })} className={inputClasses}>
-                                {loading.products ? <option>Cargando...</option> : products.map(p => <option key={p.productID} value={p.productID}>{p.name} ({p.salePrice.toFixed(2)})</option>)}
+                                {loading.products ? <option value="">Cargando...</option> : (
+                                    <>
+                                        <option value="">-- Seleccione Producto --</option>
+                                        {products.map(p => <option key={p.productID} value={p.productID}>{p.name} ({p.salePrice.toFixed(2)})</option>)}
+                                    </>
+                                )}
                             </select>
                             {errors.ProductID && <p className="text-danger text-xs mt-1">{errors.ProductID.message}</p>}
                         </div>
@@ -140,24 +162,24 @@ const MonthlyGenerationPage: React.FC = () => {
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium">Tasa IVA (%)</label>
-                                <input type="number" {...register('TasaIva', { valueAsNumber: true })} className={inputClasses}/>
+                                <input type="number" {...register('TasaIva', { valueAsNumber: true, min: 0 })} className={inputClasses} />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium">Cantidad</label>
-                                <input type="number" {...register('Cantidad', { valueAsNumber: true })} className={inputClasses}/>
+                                <input type="number" step="0.01" {...register('Cantidad', { valueAsNumber: true, min: 0.01, required: true })} className={inputClasses} />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium">Serie</label>
-                                <input {...register('Serie')} className={inputClasses}/>
+                                <input {...register('Serie', { maxLength: 10 })} className={inputClasses} />
                             </div>
-                             <div>
+                            <div>
                                 <label className="block text-sm font-medium">Moneda</label>
-                                <input {...register('Moneda')} className={inputClasses}/>
+                                <input {...register('Moneda', { required: true, maxLength: 3 })} className={inputClasses} />
                             </div>
                         </div>
 
                         <div className="pt-4 flex justify-end space-x-2">
-                             <button type="button" onClick={handleSubmit(onPreview)} disabled={isGenerating} className="bg-secondary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 disabled:opacity-50">
+                            <button type="button" onClick={handleSubmit(onPreview)} disabled={isGenerating} className="bg-secondary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 disabled:opacity-50">
                                 {isGenerating ? 'Procesando...' : 'Previsualizar'}
                             </button>
                             <button type="button" onClick={handleSubmit(onRun)} disabled={isGenerating || !generationResult || !generationResult.dryRun} className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 disabled:bg-gray-400">

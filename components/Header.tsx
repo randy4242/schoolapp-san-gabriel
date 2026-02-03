@@ -2,9 +2,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { apiService, GlobalSearchResult } from '../services/apiService';
+// FIX: Removed GlobalSearchResult from apiService import
+import { apiService } from '../services/apiService';
 import { SearchIcon, UserCircleIcon } from './icons';
-import { Evaluation, Classroom, ExtracurricularActivity } from '../types';
+// FIX: Imported GlobalSearchResult and ExtracurricularActivity from types
+import { Evaluation, Classroom, ExtracurricularActivity, GlobalSearchResult } from '../types';
 import NotificationBell from './notifications/NotificationBell';
 
 const useDebounce = (value: string, delay: number) => {

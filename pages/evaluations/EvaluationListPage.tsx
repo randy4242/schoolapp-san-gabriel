@@ -97,6 +97,8 @@ const EvaluationListPage: React.FC = () => {
                     apiService.getClassrooms(user.schoolId),
                     apiService.getUsers(user.schoolId)
                 ]);
+                
+                // Ahora todas las evaluaciones aquí son calificables por diseño
                 setEvaluations(evalData);
                 setCourses(taughtCoursesData);
                 setLapsos(lapsoData);
@@ -122,8 +124,6 @@ const EvaluationListPage: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, [user, filters.lapsoId, filters.courseId]);
-
-    const userMap = useMemo(() => new Map(users.map(u => [u.userID, u.userName])), [users]);
 
     const professorClassrooms: Classroom[] = useMemo(() => {
         const evaluationClassroomIds = new Set(
@@ -154,17 +154,11 @@ const EvaluationListPage: React.FC = () => {
         return Object.fromEntries(Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)));
     }, [filteredEvaluations, classrooms]);
     
-    const getEvaluationParts = (description: string | null | undefined): { text: string, percent: string, override: string, isNonEvaluable: boolean } => {
-        if (!description) return { text: '—', percent: '—', override: '', isNonEvaluable: false };
+    const getEvaluationParts = (description: string | null | undefined): { text: string, percent: string, override: string } => {
+        if (!description) return { text: '—', percent: '—', override: '' };
     
         let currentDesc = description;
         let override = '';
-        let isNonEvaluable = false;
-
-        if (currentDesc.includes('| No evaluado |')) {
-            isNonEvaluable = true;
-            currentDesc = currentDesc.replace('| No evaluado |', '').trim();
-        }
 
         const overrideMatch = currentDesc.match(/@@OVERRIDE:.*$/);
         if (overrideMatch) {
@@ -177,10 +171,10 @@ const EvaluationListPage: React.FC = () => {
             const potentialPercent = parts[parts.length - 1];
             if (!isNaN(parseFloat(potentialPercent))) {
                  const percent = parts.pop();
-                 return { text: parts.join('@').trim(), percent: `${percent}%`, override, isNonEvaluable };
+                 return { text: parts.join('@').trim(), percent: `${percent}%`, override };
             }
         }
-        return { text: currentDesc.trim(), percent: '—', override, isNonEvaluable };
+        return { text: currentDesc.trim(), percent: '—', override };
     };
 
     const handleDelete = async (evaluationId: number) => {
@@ -196,10 +190,9 @@ const EvaluationListPage: React.FC = () => {
     
     const confirmGrantOverride = async () => {
         if (!evaluationToUnlock || !user || user.roleId !== 6) return;
-        const { text, percent, isNonEvaluable } = getEvaluationParts(evaluationToUnlock.description);
+        const { text, percent } = getEvaluationParts(evaluationToUnlock.description);
         const percentValue = percent.replace('%', '');
         let cleanDescription = text === '—' ? '' : text;
-        if (isNonEvaluable) cleanDescription += ' | No evaluado |';
         if (percentValue !== '—' && percentValue !== '') cleanDescription = `${cleanDescription}@${percentValue}`;
         const newDescription = `${cleanDescription} @@OVERRIDE:${user.userId}:${Date.now()}`;
         try {
@@ -217,18 +210,6 @@ const EvaluationListPage: React.FC = () => {
         } catch (err: any) { setError(err.message || 'Error al bloquear.'); } finally { setEvaluationToLock(null); }
     };
 
-    const handleSendUnlockRequest = async () => {
-        if (!user || !user.schoolId || !requestingUnlockFor) return;
-        setIsSendingRequest(true);
-        try {
-            const title = `[UNLOCK_REQUEST][EVAL_ID:${requestingUnlockFor.evaluationID}] Solicitud de Edición`;
-            let content = `El profesor ${user.userName} solicita permiso para editar '${requestingUnlockFor.title}'.`;
-            if (unlockComment.trim()) content += `\n\nMotivo: ${unlockComment.trim()}`;
-            await apiService.sendToRole(user.schoolId, 6, { title, content });
-            alert("Solicitud enviada.");
-        } finally { setIsSendingRequest(false); setRequestingUnlockFor(null); setUnlockComment(''); }
-    };
-
     const handleAssignGrades = (evaluation: Evaluation) => {
         const isDescriptiveSchool = user?.schoolId && [5, 6, 7, 8, 9].includes(user.schoolId);
         const courseName = evaluation.course?.name?.toLowerCase() || '';
@@ -240,7 +221,7 @@ const EvaluationListPage: React.FC = () => {
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-text-primary">Lista de Evaluaciones</h1>
+                <h1 className="text-2xl font-bold text-text-primary">Gestión de Notas</h1>
                 {canManage && (
                     <Link to="/evaluations/create" className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-opacity-80 transition-colors">
                         Crear Evaluación
@@ -293,7 +274,7 @@ const EvaluationListPage: React.FC = () => {
                                 </thead>
                                 <tbody className="bg-surface divide-y divide-border">
                                     {evalsInGroup.map((e) => {
-                                        const { text, percent, isNonEvaluable } = getEvaluationParts(e.description);
+                                        const { text, percent } = getEvaluationParts(e.description);
                                         const editable = isEvaluationEditable(e, user);
                                         const isSuperAdmin = user?.roleId === 6;
                                         const lockedForTeacher = isLockedForTeacher(e);
@@ -305,25 +286,14 @@ const EvaluationListPage: React.FC = () => {
                                                     <span className="font-medium">{e.title}</span>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex flex-col gap-1">
-                                                    {isNonEvaluable && (
-                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200 w-fit">
-                                                            No evaluable
-                                                        </span>
-                                                    )}
-                                                    <span className="text-sm text-text-secondary">{text}</span>
-                                                </div>
-                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-text-secondary truncate max-w-xs">{text}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">{percent}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm">{new Date(e.date).toLocaleDateString()}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                 <div className="flex items-center space-x-2">
-                                                    {!isNonEvaluable && (
-                                                        <button onClick={() => handleAssignGrades(e)} className="text-success hover:text-success-text p-1" title="Asignar Notas">
-                                                            <ClipboardCheckIcon />
-                                                        </button>
-                                                    )}
+                                                    <button onClick={() => handleAssignGrades(e)} className="text-success hover:text-success-text p-1" title="Asignar Notas">
+                                                        <ClipboardCheckIcon />
+                                                    </button>
                                                     {editable ? (
                                                         <button onClick={() => navigate(`/evaluations/edit/${e.evaluationID}`)} className="p-1 text-warning hover:text-warning-dark" title="Editar">
                                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
