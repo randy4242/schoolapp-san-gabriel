@@ -6,7 +6,9 @@ import { PayrollDetail, ROLES } from '../../types';
 import { BriefcaseIcon } from '../../components/icons';
 import Modal from '../../components/Modal';
 
-const formatMoney = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatMoney = (amount: number | undefined | null) => {
+    return (amount || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 const periodLabel = (y: number, m: number) => `${y}-${String(m).padStart(2, "0")}`;
 
 const PayrollDetailPage: React.FC = () => {
@@ -35,7 +37,7 @@ const PayrollDetailPage: React.FC = () => {
             setLoading(false);
         }
     };
-    
+
     useEffect(() => {
         fetchDetail();
     }, [id]);
@@ -76,7 +78,7 @@ const PayrollDetailPage: React.FC = () => {
     return (
         <div className="max-w-6xl mx-auto space-y-6">
             <h1 className="text-2xl font-bold text-text-primary flex items-center"><BriefcaseIcon /><span className="ml-2">Detalle de Nómina</span></h1>
-            
+
             <div className="bg-surface p-6 rounded-lg shadow-md space-y-4">
                 <div className="flex justify-between items-start">
                     <div>
@@ -84,7 +86,7 @@ const PayrollDetailPage: React.FC = () => {
                         <p className="text-sm text-text-secondary">ID de Nómina: {header.payrollID} | Estado: <span className="font-bold">{header.status}</span></p>
                     </div>
                     <div className="space-x-2">
-                        {header.status === 'Issued' && 
+                        {header.status === 'Issued' &&
                             <button onClick={handleClosePeriod} className="bg-warning text-white py-2 px-4 rounded hover:bg-opacity-80 text-sm">Cerrar Período</button>
                         }
                         {header.status !== 'Annulled' && header.status !== 'Closed' &&
@@ -117,7 +119,9 @@ const PayrollDetailPage: React.FC = () => {
                                 <td className="px-3 py-2 whitespace-nowrap">{getRoleName(line.roleID)}</td>
                                 <td className="px-3 py-2 text-right">{formatMoney(line.baseAmount)}</td>
                                 <td className="px-3 py-2 text-right">{formatMoney(line.transportAllow)}</td>
-                                <td className="px-3 py-2 text-right">{formatMoney(line.otherAllow)}</td>
+                                <td className="px-3 py-2 text-right">
+                                    <BonusBreakdown detailsJson={line.allowanceDetails} total={line.otherAllow} />
+                                </td>
                                 <td className="px-3 py-2 text-right text-red-600">({formatMoney(line.isr)})</td>
                                 <td className="px-3 py-2 text-right text-red-600">({formatMoney(line.pension)})</td>
                                 <td className="px-3 py-2 text-right text-red-600">({formatMoney(line.otherDed)})</td>
@@ -128,10 +132,10 @@ const PayrollDetailPage: React.FC = () => {
                 </table>
             </div>
 
-             <Modal isOpen={annulModal.isOpen} onClose={() => setAnnulModal({ isOpen: false, reason: '' })} title="Anular Nómina">
+            <Modal isOpen={annulModal.isOpen} onClose={() => setAnnulModal({ isOpen: false, reason: '' })} title="Anular Nómina">
                 <div className="space-y-4">
                     <p>¿Está seguro de que desea anular esta nómina? Esta acción es irreversible.</p>
-                    <input type="text" placeholder="Motivo (opcional)" value={annulModal.reason} onChange={e => setAnnulModal(prev => ({...prev, reason: e.target.value}))} className="w-full p-2 border rounded"/>
+                    <input type="text" placeholder="Motivo (opcional)" value={annulModal.reason} onChange={e => setAnnulModal(prev => ({ ...prev, reason: e.target.value }))} className="w-full p-2 border rounded" />
                     <div className="flex justify-end space-x-2">
                         <button onClick={() => setAnnulModal({ isOpen: false, reason: '' })} className="bg-background py-2 px-4 rounded">Cancelar</button>
                         <button onClick={handleAnnulConfirm} className="bg-danger text-white py-2 px-4 rounded">Confirmar Anulación</button>
@@ -140,6 +144,46 @@ const PayrollDetailPage: React.FC = () => {
             </Modal>
         </div>
     );
+};
+
+// Helper function safely parses allowanceDetails
+const BonusBreakdown: React.FC<{ detailsJson?: string, total: number }> = ({ detailsJson, total }) => {
+    if (!detailsJson) return <span>{formatMoney(total)}</span>;
+
+    try {
+        const bonuses = JSON.parse(detailsJson);
+        if (!Array.isArray(bonuses) || bonuses.length === 0) return <span>{formatMoney(total)}</span>;
+
+        return (
+            <div className="group relative inline-block cursor-help">
+                <span className="border-b border-dotted border-gray-500">{formatMoney(total)}</span>
+                <div className="invisible group-hover:visible absolute z-10 w-64 p-2 bg-white border border-gray-200 shadow-lg rounded text-xs text-left bottom-full mb-2 left-1/2 -translate-x-1/2">
+                    <div className="font-bold mb-1 border-b pb-1 text-gray-700">Detalle de Asignaciones</div>
+                    <table className="w-full">
+                        <tbody>
+                            {bonuses.map((b: any, idx: number) => {
+                                const amount = Number(b.amount) || 0;
+                                const ded = Number(b.deductionAmount) || 0;
+                                const net = amount - ded;
+                                return (
+                                    <tr key={idx} className="border-b border-gray-100 last:border-0">
+                                        <td className="py-1">
+                                            <div className="font-medium">{b.name}</div>
+                                            {ded > 0 && <div className="text-red-500 text-[10px]">- {formatMoney(ded)} ({b.deductionReason})</div>}
+                                        </td>
+                                        <td className="py-1 text-right align-top">{formatMoney(net)}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        );
+    } catch (e) {
+        console.error("Error parsing allowance details", e);
+        return <span>{formatMoney(total)}</span>;
+    }
 };
 
 export default PayrollDetailPage;

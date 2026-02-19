@@ -3,8 +3,9 @@ import { useNavigate, Link, useParams } from 'react-router-dom';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { apiService } from '../../services/apiService';
 import { useAuth } from '../../hooks/useAuth';
-import { User, IndicatorSection, StudentAttendanceStats, Lapso, BOLETA_LEVELS } from '../../types';
+import { User, IndicatorSection, StudentAttendanceStats, Lapso, BOLETA_LEVELS, BoletaEvaluationPlan } from '../../types';
 import DescriptiveGradeSheet from '../../components/evaluations/DescriptiveGradeSheet';
+import { transformIndicators } from '../../utils/indicatorUtils';
 import {
     SALA_1_INDICATORS, SALA_2_INDICATORS, SALA_3_INDICATORS,
     PRIMER_GRADO_INDICATORS, SEGUNDO_GRADO_INDICATORS, TERCER_GRADO_INDICATORS,
@@ -67,7 +68,7 @@ const determineBoletaLevel = (classroomName: string | undefined | null): string 
     if (/(cuarto\s*grado|4to\s*grado|4\s*grado|grado\s*4)/.test(normalized)) return "Cuarto Grado";
     if (/(quinto\s*grado|5to\s*grado|5\s*grado|grado\s*5)/.test(normalized)) return "Quinto Grado";
     if (/(sexto\s*grado|6to\s*grado|6\s*grado|grado\s*6)/.test(normalized)) return "Sexto Grado";
-    
+
     return null;
 };
 
@@ -85,7 +86,7 @@ const BoletaFormPage: React.FC = () => {
     const isEditMode = Boolean(id);
     const { user, hasPermission } = useAuth();
     const navigate = useNavigate();
-    
+
     const { register, handleSubmit, watch, setValue, getValues, reset, formState: { errors } } = useForm<FormInputs>({
         defaultValues: {
             signatoryName: user?.userName || "",
@@ -111,7 +112,10 @@ const BoletaFormPage: React.FC = () => {
     const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
     const [originalCreatorId, setOriginalCreatorId] = useState<number | null>(null);
     const [dateRangeInfo, setDateRangeInfo] = useState<string>('');
-    
+    const [dynamicIndicators, setDynamicIndicators] = useState<IndicatorSection[]>([]);
+    const [isFetchingIndicators, setIsFetchingIndicators] = useState(false);
+
+
     const selectedUserId = watch('userId');
     const selectedLevel = watch('level');
     const selectedLapsoId = watch('lapsoId');
@@ -135,10 +139,10 @@ const BoletaFormPage: React.FC = () => {
                 setSchoolName(schoolNameData);
                 setLapsos(lapsosData);
             }).catch(() => setError("No se pudo cargar la data inicial."))
-            .finally(() => setLoading(false));
+                .finally(() => setLoading(false));
         }
     }, [user]);
-    
+
     useEffect(() => {
         if (lapsos.length > 0 && selectedLapsoId) {
             const selectedLapso = lapsos.find(l => l.lapsoID === Number(selectedLapsoId));
@@ -151,18 +155,18 @@ const BoletaFormPage: React.FC = () => {
 
                 const startDate = parseLocal(selectedLapso.fechaInicio);
                 const endDate = parseLocal(selectedLapso.fechaFin);
-                
+
                 setDateRangeInfo(`(${startDate.toLocaleDateString('es-ES')} al ${endDate.toLocaleDateString('es-ES')})`);
 
                 const calculateTotalBusinessDays = (start: Date, end: Date): number => {
                     let count = 0;
                     const curDate = new Date(start.getTime());
-                    
+
                     if (curDate > end) return 0;
 
                     while (curDate <= end) {
                         const dayOfWeek = curDate.getDay();
-                        if (dayOfWeek !== 0 && dayOfWeek !== 6) { 
+                        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
                             count++;
                         }
                         curDate.setDate(curDate.getDate() + 1);
@@ -171,12 +175,12 @@ const BoletaFormPage: React.FC = () => {
                 };
 
                 const totalWorkingDays = calculateTotalBusinessDays(startDate, endDate);
-                
+
                 const currentVal = getValues('diasHabiles');
                 if (!currentVal || currentVal == 0) {
                     setValue('diasHabiles', totalWorkingDays);
                 }
-            } 
+            }
         }
     }, [lapsos, selectedLapsoId, getValues, setValue]);
 
@@ -186,9 +190,9 @@ const BoletaFormPage: React.FC = () => {
                 setDetailsLoading(true);
                 setLevelMessage(null);
                 setAttendanceStats(null);
-                
+
                 if (!isEditMode) {
-                    setValue('level', ''); 
+                    setValue('level', '');
                 }
 
                 try {
@@ -215,12 +219,12 @@ const BoletaFormPage: React.FC = () => {
                     if (!classroomName && students.length > 0) {
                         const currentStudent = students.find(s => s.userID === Number(selectedUserId));
                         if (currentStudent?.classroomID) {
-                             try {
+                            try {
                                 const cls = await apiService.getClassroomById(currentStudent.classroomID, user.schoolId);
                                 classroomName = cls.name;
-                             } catch (clsErr) {
-                                 console.warn("Failed to fetch classroom by ID from student list fallback");
-                             }
+                            } catch (clsErr) {
+                                console.warn("Failed to fetch classroom by ID from student list fallback");
+                            }
                         }
                     }
 
@@ -242,7 +246,7 @@ const BoletaFormPage: React.FC = () => {
                                 text: `El salón "${cleanClassName}" no tiene un nivel automático. Por favor seleccione la boleta manualmente.`
                             });
                         } else {
-                             setLevelMessage({
+                            setLevelMessage({
                                 type: 'warning',
                                 text: `No se pudo detectar el salón del estudiante. Seleccione el nivel manualmente.`
                             });
@@ -276,8 +280,8 @@ const BoletaFormPage: React.FC = () => {
                         console.error("Failed to parse boleta content", e);
                     }
                     const typedContent = content as any;
-                    
-                    setOriginalCreatorId(typedContent.createdBy || boletaData.userId); 
+
+                    setOriginalCreatorId(typedContent.createdBy || boletaData.userId);
 
                     // Construct the full form data object for reset()
                     const formData: any = {
@@ -291,12 +295,12 @@ const BoletaFormPage: React.FC = () => {
                         diasHabiles: typedContent.data?.diasHabiles || '',
                         manualAsistencias: typedContent.data?.manualAsistencias || '',
                         manualInasistencias: typedContent.data?.manualInasistencias || '',
-                        
+
                         // Additional Teacher Fields
                         manualTeacherName: typedContent.data?.manualTeacherName || '',
                         manualTeacherCedulaPrefix: typedContent.data?.manualTeacherCedulaPrefix || 'V',
                         manualTeacherCedulaNumber: typedContent.data?.manualTeacherCedulaNumber || '',
-                        
+
                         // Text Areas
                         actitudesHabitos: typedContent.data?.actitudesHabitos || '',
                         recomendacionesDocente: typedContent.data?.recomendacionesDocente || ''
@@ -305,7 +309,7 @@ const BoletaFormPage: React.FC = () => {
                     // Merge all dynamic grade keys (e.g., "0-1": "Consolidado") into formData
                     if (typedContent.data) {
                         const isPrimary = (typedContent.level || '').includes('Grado');
-                        
+
                         for (const key in typedContent.data) {
                             // Migrate legacy "Sin Evidencias" to "Con Ayuda" ONLY for Primary levels
                             if (isPrimary && typedContent.data[key] === "Sin Evidencias") {
@@ -330,10 +334,39 @@ const BoletaFormPage: React.FC = () => {
         }
     }, [id, isEditMode, user, reset, students, lapsos]);
 
+    useEffect(() => {
+        const fetchIndicators = async () => {
+            if (user?.schoolId && selectedLevel && selectedLapsoId) {
+                setIsFetchingIndicators(true);
+                try {
+                    const plans = await apiService.getBoletaPlans(user.schoolId, Number(selectedLapsoId));
+                    const activePlan = plans.find(p => p.level === selectedLevel && p.isActive);
+
+                    if (activePlan) {
+                        const indicatorsDto = await apiService.getIndicatorsByPlan(activePlan.planId);
+                        const sections = transformIndicators(indicatorsDto);
+                        setDynamicIndicators(sections);
+                    } else {
+                        setDynamicIndicators([]);
+                    }
+                } catch (e) {
+                    console.error("Error fetching dynamic indicators", e);
+                    setDynamicIndicators([]);
+                } finally {
+                    setIsFetchingIndicators(false);
+                }
+            } else {
+                setDynamicIndicators([]);
+            }
+        };
+
+        fetchIndicators();
+    }, [user?.schoolId, selectedLevel, selectedLapsoId]);
+
     const filteredStudents = useMemo(() => {
         if (!userSearch) return students;
-        return students.filter(s => 
-            s.userName.toLowerCase().includes(userSearch.toLowerCase()) || 
+        return students.filter(s =>
+            s.userName.toLowerCase().includes(userSearch.toLowerCase()) ||
             (s.cedula && s.cedula.includes(userSearch))
         );
     }, [students, userSearch]);
@@ -351,14 +384,17 @@ const BoletaFormPage: React.FC = () => {
         return [];
     };
 
-    const indicators = useMemo(() => getIndicators(selectedLevel), [selectedLevel]);
+    const indicators = useMemo(() => {
+        if (dynamicIndicators.length > 0) return dynamicIndicators;
+        return getIndicators(selectedLevel);
+    }, [selectedLevel, dynamicIndicators]);
 
     const onSubmit: SubmitHandler<FormInputs> = async (data) => {
         if (!user?.schoolId) {
             setError("No se ha podido identificar el colegio.");
             return;
         }
-        
+
         if (!data.level) {
             setError("Debe seleccionar un Nivel/Grado para generar la boleta.");
             return;
@@ -366,22 +402,23 @@ const BoletaFormPage: React.FC = () => {
 
         setLoading(true);
         setError('');
-        
+
         const { userId, level, signatoryName, signatoryTitle, turno, diasHabiles, lapsoId, manualAsistencias, manualInasistencias, manualTeacherName, manualTeacherCedulaPrefix, manualTeacherCedulaNumber, ...gradesData } = data;
-        
+
         const selectedLapso = lapsos.find(l => l.lapsoID === Number(lapsoId));
-        
+
         const finalAttendance = {
             ...attendanceStats,
             total: (diasHabiles !== null && diasHabiles !== undefined && String(diasHabiles).trim() !== '') ? Number(diasHabiles) : attendanceStats?.total,
         };
-         
+
         const contentPayload = {
             level: level,
             data: {
-                ...gradesData, 
+                ...gradesData,
+                indicatorStructure: indicators, // Save snapshot of indicators
                 diasHabiles: finalAttendance.total,
-                manualAsistencias, 
+                manualAsistencias,
                 manualInasistencias,
                 manualTeacherName,
                 manualTeacherCedulaPrefix,
@@ -391,7 +428,7 @@ const BoletaFormPage: React.FC = () => {
             attendance: finalAttendance,
             schoolName: schoolName,
             lapso: selectedLapso,
-            createdBy: originalCreatorId || user.userId, 
+            createdBy: originalCreatorId || user.userId,
         };
 
         const isConfirmed = isSuperAdmin;
@@ -400,12 +437,13 @@ const BoletaFormPage: React.FC = () => {
 
         const apiPayload = {
             userId: Number(userId),
+            studentID: Number(userId), // Added to fix lint
             certificateType: 'Boleta',
             signatoryName,
             signatoryTitle,
             content: finalContent,
             schoolId: user.schoolId,
-            issueDate: new Date().toISOString() 
+            issueDate: new Date().toISOString()
         };
 
         try {
@@ -451,11 +489,11 @@ const BoletaFormPage: React.FC = () => {
                     </div>
                 </Modal>
             )}
-            
+
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold text-text-primary">{isEditMode ? 'Editar Boleta' : 'Crear Nueva Boleta'}</h1>
-                <button 
-                    type="button" 
+                <button
+                    type="button"
                     onClick={() => setIsGuideModalOpen(true)}
                     className="bg-info text-white py-2 px-4 rounded text-sm hover:bg-info-dark"
                 >
@@ -470,11 +508,11 @@ const BoletaFormPage: React.FC = () => {
                     Nota: Al guardar, esta boleta quedará en estado <strong>Pendiente</strong> y se enviará una notificación a la administración para su revisión y aprobación.
                 </div>
             )}
-            
+
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                     <div>
+                    <div>
                         <label className="block text-sm font-medium text-text-primary mb-1">Buscar Estudiante:</label>
                         <input type="text" value={userSearch} onChange={e => setUserSearch(e.target.value)} disabled={isEditMode} className="mb-2 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md disabled:bg-background" placeholder="Escribe un nombre o cédula..." />
                         <select {...register('userId', { required: 'Debe seleccionar un estudiante', valueAsNumber: true })} disabled={isEditMode} className="block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md disabled:bg-background">
@@ -483,13 +521,13 @@ const BoletaFormPage: React.FC = () => {
                         </select>
                         {errors.userId && <p className="text-danger text-xs mt-1">{errors.userId.message}</p>}
                     </div>
-                     <div>
+                    <div>
                         <label className="block text-sm font-medium text-text-primary mb-1">Lapso Evaluado:</label>
                         <select {...register('lapsoId', { required: 'Debe seleccionar un lapso', valueAsNumber: true })} className="block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md">
                             <option value="">Seleccione un lapso...</option>
                             {lapsos.map(l => <option key={l.lapsoID} value={l.lapsoID}>{l.nombre}</option>)}
                         </select>
-                         {errors.lapsoId && <p className="text-danger text-xs mt-1">{errors.lapsoId.message}</p>}
+                        {errors.lapsoId && <p className="text-danger text-xs mt-1">{errors.lapsoId.message}</p>}
                     </div>
 
                     <div>
@@ -523,11 +561,10 @@ const BoletaFormPage: React.FC = () => {
                     </div>
 
                     {levelMessage && (
-                        <div className={`mt-2 p-2 text-xs rounded border ${
-                            levelMessage.type === 'success' ? 'bg-success-light border-success text-success-text' : 
-                            levelMessage.type === 'warning' ? 'bg-warning/10 border-warning text-warning-dark' : 
-                            'bg-danger-light border-danger text-danger-text'
-                        }`}>
+                        <div className={`mt-2 p-2 text-xs rounded border ${levelMessage.type === 'success' ? 'bg-success-light border-success text-success-text' :
+                            levelMessage.type === 'warning' ? 'bg-warning/10 border-warning text-warning-dark' :
+                                'bg-danger-light border-danger text-danger-text'
+                            }`}>
                             {levelMessage.text}
                         </div>
                     )}
@@ -537,7 +574,7 @@ const BoletaFormPage: React.FC = () => {
                 {selectedLevel && (
                     <div className="animate-fade-in-down">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 border-t pt-4 mt-4">
-                             <div>
+                            <div>
                                 <label className="block text-sm font-medium text-text-primary">Turno:</label>
                                 <select {...register('turno')} className="mt-1 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md">
                                     <option value="Mañana">Mañana</option>
@@ -546,9 +583,9 @@ const BoletaFormPage: React.FC = () => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-text-primary">Días Hábiles</label>
-                                <input 
+                                <input
                                     type="number"
-                                    {...register('diasHabiles')} 
+                                    {...register('diasHabiles')}
                                     className="mt-1 block w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent/50"
                                     placeholder="Total días"
                                 />
@@ -558,18 +595,18 @@ const BoletaFormPage: React.FC = () => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-text-primary">Asistencias (Manual)</label>
-                                <input 
+                                <input
                                     type="text"
-                                    {...register('manualAsistencias')} 
+                                    {...register('manualAsistencias')}
                                     className="mt-1 block w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent/50"
                                     placeholder="Ej: 15"
                                 />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-text-primary">Inasistencias (Manual)</label>
-                                <input 
+                                <input
                                     type="text"
-                                    {...register('manualInasistencias')} 
+                                    {...register('manualInasistencias')}
                                     className="mt-1 block w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent/50"
                                     placeholder="Ej: 2"
                                 />
@@ -580,9 +617,9 @@ const BoletaFormPage: React.FC = () => {
                             {!selectedLevel?.includes('Grado') && (
                                 <div className="md:col-span-2 lg:col-span-4">
                                     <label className="block text-sm font-medium text-text-primary">Características de la actuación escolar:</label>
-                                    <textarea 
-                                        {...register('schoolPerformanceFeatures')} 
-                                        rows={3} 
+                                    <textarea
+                                        {...register('schoolPerformanceFeatures')}
+                                        rows={3}
                                         maxLength={250}
                                         className="mt-1 block w-full px-3 py-2 border border-border bg-surface text-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-accent/50"
                                         placeholder="Escriba aquí las características generales..."
@@ -602,8 +639,8 @@ const BoletaFormPage: React.FC = () => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-xs text-text-secondary">Nombre Completo</label>
-                                            <input 
-                                                {...register('manualTeacherName')} 
+                                            <input
+                                                {...register('manualTeacherName')}
                                                 className="mt-1 w-full px-3 py-2 border border-border bg-surface rounded text-sm"
                                                 placeholder="Ej. María Pérez"
                                             />
@@ -611,7 +648,7 @@ const BoletaFormPage: React.FC = () => {
                                         <div>
                                             <label className="block text-xs text-text-secondary">Cédula</label>
                                             <div className="flex gap-2">
-                                                <select 
+                                                <select
                                                     {...register('manualTeacherCedulaPrefix')}
                                                     className="mt-1 w-20 px-2 py-2 border border-border bg-surface rounded text-sm"
                                                 >
@@ -619,7 +656,7 @@ const BoletaFormPage: React.FC = () => {
                                                     <option value="E">E</option>
                                                     <option value="P">P</option>
                                                 </select>
-                                                <input 
+                                                <input
                                                     {...register('manualTeacherCedulaNumber')}
                                                     className="mt-1 w-full px-3 py-2 border border-border bg-surface rounded text-sm"
                                                     placeholder="12345678"
@@ -666,7 +703,7 @@ const BoletaFormPage: React.FC = () => {
                         )}
                     </div>
                 )}
-                
+
                 <div className="flex justify-end space-x-4 pt-8 border-t">
                     <Link to="/boletas" className="bg-background text-text-primary py-2 px-4 rounded hover:bg-border">Cancelar</Link>
                     <button type="submit" disabled={loading || detailsLoading || !selectedLevel} className="bg-primary text-text-on-primary py-2 px-4 rounded hover:bg-primary/90 disabled:bg-secondary disabled:cursor-not-allowed">

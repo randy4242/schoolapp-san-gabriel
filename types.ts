@@ -7,6 +7,7 @@ export interface AuthenticatedUser {
     userName: string;
     email: string;
     roleId: number;
+    cedula?: string;
 }
 
 export interface AuthResponse {
@@ -17,7 +18,7 @@ export interface AuthResponse {
 export const ROLES = [
     { id: 1, name: 'Estudiante' },
     { id: 2, name: 'Profesor' },
-    { id: 3, name: 'Padre' },
+    { id: 3, name: 'Representante' },
     { id: 6, name: 'Administrador' },
     { id: 7, name: 'Super Admin' },
     { id: 8, name: 'Coordinador' },
@@ -25,6 +26,17 @@ export const ROLES = [
     { id: 10, name: 'Auxiliar' },
 
 ];
+
+export interface ExchangeRate {
+    exchangeRateID: number;
+    schoolID: number;
+    fromCurrency: string;
+    toCurrency: string;
+    rate: number;
+    effectiveDate: string;
+    isActive: boolean;
+    notes?: string;
+}
 
 export interface User {
     userID: number;
@@ -41,6 +53,26 @@ export interface User {
     classroomID?: number;
     lugarNacimiento?: string;
     baseSalary?: number;
+    nombre?: string;
+    apellido?: string;
+}
+
+export interface School {
+    schoolID: number;
+    name: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    phone: string;
+    email: string;
+    schoolYear: string;
+    organizationID?: number;
+    primaryColor: string;
+    secondaryColor: string;
+    accentColor: string;
+    logoUrl?: string;
+    isActive: boolean;
+    createdAt: string;
 }
 
 // FIX: Added Teacher type
@@ -105,9 +137,12 @@ export interface GenderStatsResponse {
 export interface Lapso {
     lapsoID: number;
     nombre: string;
+    nombreLapso?: string; // Add alias if needed for compatibility
     fechaInicio: string;
     fechaFin: string;
     schoolID: number;
+    isCurrent?: boolean; // Added for active lapso check
+    activo?: boolean;
 }
 
 export interface Classroom {
@@ -325,7 +360,9 @@ export interface Product {
     costPrice: number;
     salePrice: number;
     isActive: boolean;
+    trackInventory?: boolean;
     schoolID: number;
+    currency?: string; // Added for multi-currency support
 }
 
 export interface ProductAudience {
@@ -466,8 +503,17 @@ export interface PendingInvoice {
     invoiceID: number;
     numeroFactura: string;
     clienteNombre: string;
+    clienteRifCedula?: string;
     fechaEmision: string;
+    fechaVencimiento?: string;
     totalGeneral: number;
+    moneda: string;
+    descripcion?: string;
+    studentName?: string;
+    productList?: string;
+    invoiceType?: string;
+    serie?: string;
+    condicionPago?: string;
 }
 
 export interface PaginatedInvoices {
@@ -573,7 +619,9 @@ export interface PurchaseCreationResponse {
 export interface PayrollRunPayload {
     periodYear: number;
     periodMonth: number;
-    transportAllow: number;
+    startDate: string;
+    endDate: string;
+    periodName: string;
     isrPercent: number;
     pensionPercent: number;
     notes: string;
@@ -588,6 +636,8 @@ export interface PayrollRunPayload {
         employeeUserID: number;
         baseSalary: number;
         individualAllowance: number;
+        individualDeduction: number; // New field for manual deductions
+        allowanceDetails?: string; // Serialized JSON of bonuses
         allowanceNote?: string; // Concatenated description of bonuses
         isSelected: boolean;
     }[];
@@ -597,7 +647,6 @@ export interface PayrollLinePreview {
     employeeUserID: number;
     employeeName: string;
     baseAmount: number;
-    transportAllow: number;
     otherAllow: number;
     isr: number;
     pension: number;
@@ -642,6 +691,7 @@ export interface PayrollLine {
     baseAmount: number;
     transportAllow: number;
     otherAllow: number;
+    allowanceDetails?: string; // JSON string of bonuses
     isr: number;
     pension: number;
     otherDed: number;
@@ -1015,6 +1065,8 @@ export const BOLETA_LEVELS = [
     "Cuarto Grado", "Quinto Grado", "Sexto Grado"
 ];
 
+// ... existing code ...
+
 export interface ExchangeRate {
     rateID: number;
     rate: number;
@@ -1023,4 +1075,56 @@ export interface ExchangeRate {
     date: string;
     isActive: boolean;
     schoolID: number;
+}
+
+export interface IndicatorSection {
+    title: string;
+    hasRecommendations?: boolean;
+    indicators: { text: string }[];
+}
+
+export interface BoletaEvaluationPlan {
+    planId: number;
+    name: string;
+    schoolId: number;
+    level: string;
+    lapsoId: number;
+    isActive: boolean;
+}
+
+export interface IndicatorDto {
+    indicatorId: number;
+    planId: number;
+    section: string;
+    subSection?: string;
+    content: string;
+    orderIndex: number;
+}
+
+export interface BoletaEvaluationPlanCreateDto {
+    name: string;
+    schoolId: number;
+    level: string;
+    lapsoId: number;
+}
+
+export interface BoletaEvaluationPlanUpdateDto {
+    name: string;
+    level: string;
+    isActive: boolean;
+}
+
+export interface IndicatorCreateDto {
+    planId: number;
+    section: string;
+    subSection?: string;
+    content: string;
+    orderIndex: number;
+}
+
+export interface IndicatorUpdateDto {
+    section: string;
+    subSection?: string;
+    content: string;
+    orderIndex: number;
 }

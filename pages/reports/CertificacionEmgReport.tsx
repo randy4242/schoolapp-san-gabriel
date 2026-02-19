@@ -8,7 +8,7 @@ interface CertificadoTemplateProps {
   templateRef: React.RefObject<HTMLDivElement>;
 }
 
-// --- Helper Functions & Components si ---
+// --- Helper Functions & Components si si ---
 
 const numberToLetter = (num: number | string | null | undefined): string => {
     if (num === null || num === undefined || num === '') return '';

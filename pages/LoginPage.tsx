@@ -2,11 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../hooks/useTheme';
 import { apiService } from '../services/apiService';
 import { jwtDecode } from 'jwt-decode';
 import { EyeIcon, EyeOffIcon } from '../components/icons';
 
 const LoginPage: React.FC = () => {
+  const { currentColors, schoolName } = useTheme();
   const [emailOrUserName, setEmailOrUserName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -32,42 +34,68 @@ const LoginPage: React.FC = () => {
 
     try {
       const authResponse = await apiService.login(emailOrUserName, password);
-      
+
       if (!authResponse || !authResponse.token) {
         throw new Error("Respuesta de login inválida o token no encontrado.");
       }
-      
+
       // Decode token to get UserID
       const decodedToken: { UserID: string } = jwtDecode(authResponse.token);
       const userId = parseInt(decodedToken.UserID, 10);
-      
+
       if (!userId) {
-          throw new Error("No se pudo decodificar el ID de usuario del token.");
+        throw new Error("No se pudo decodificar el ID de usuario del token.");
       }
-      
-      // Fetch full user details with the new token
+
+      // Fetch full user details with the new token, comentario para publicar
       const userDetails = await apiService.getUserDetailsById(userId, authResponse.token);
-      
+
       if (!userDetails || !userDetails.schoolID) {
         throw new Error("No se pudieron obtener los detalles del usuario o falta el ID del colegio.");
       }
 
-      const allowedRoles = [2, 6, 7, 8, 9, 10]; // Profesor or Admin-level roles
-      
+      // MODIFICACIÓN: Se añade el Rol 1 (Estudiante) a los roles permitidos
+      const allowedRoles = [1, 2, 6, 7, 8, 9, 10];
+
       // Permitir padres (Rol 3) solo para colegios específicos (5-9)
       const isAllowedParent = userDetails.roleID === 3 && [5, 6, 7, 8, 9].includes(userDetails.schoolID);
 
       if (!allowedRoles.includes(userDetails.roleID) && !isAllowedParent) {
-          throw new Error("El usuario no tiene permisos para acceder.");
+        throw new Error("El usuario no tiene permisos para acceder.");
       }
-      
+
       if (rememberMe) {
         localStorage.setItem('rememberedUser', emailOrUserName);
       } else {
         localStorage.removeItem('rememberedUser');
       }
 
+      // Set token first by calling auth.login
       auth.login(authResponse.token, userDetails);
+
+      // Try to fetch school data with the token already set
+      try {
+        const schoolData = await apiService.getSchoolById(userDetails.schoolID);
+        console.log('✅ [LoginPage] API Response:', schoolData);
+
+        // Dispatch event with school data (not just ID)
+        console.log('🚀 [LoginPage] Dispatching schoolLogin event...');
+        window.dispatchEvent(new CustomEvent('schoolLogin', {
+          detail: {
+            schoolId: userDetails.schoolID,
+            schoolData: schoolData
+          }
+        }));
+      } catch (schoolError) {
+        console.warn('Failed to fetch school data, using fallback:', schoolError);
+        // Fallback: dispatch event with just schoolId (will use default colors)
+        window.dispatchEvent(new CustomEvent('schoolLogin', {
+          detail: {
+            schoolId: userDetails.schoolID
+          }
+        }));
+      }
+
       navigate('/dashboard');
 
     } catch (err: any) {
@@ -80,9 +108,9 @@ const LoginPage: React.FC = () => {
   return (
     <div className="flex flex-col md:flex-row min-h-screen w-full overflow-hidden">
       <div className="flex-none w-full md:w-5/12 bg-primary text-text-on-primary flex flex-col justify-center items-center p-8 text-center">
-        <img src="https://i.postimg.cc/85N2SD88/San-Gabriel-Logo.png" alt="SchoolApp Logo" className="w-32 md:w-48 mb-6" />
-        <div className="hidden md:block">
-          <h1 className="text-3xl font-bold text-text-on-primary">Bienvenido a <span className="text-accent">Colegio San Gabriel Arcángel</span></h1>
+        <img src={currentColors.logoUrl} alt="SchoolApp Logo" className="w-32 md:w-48 mb-6" />
+        <div>
+          <h1 className="text-3xl font-bold text-text-on-primary">Bienvenido a <span className="text-accent">{schoolName}</span></h1>
           <p className="mt-2 text-lg text-text-on-primary">La plataforma para gestionar tu éxito.</p>
         </div>
       </div>
@@ -98,19 +126,19 @@ const LoginPage: React.FC = () => {
                 type="text"
                 value={emailOrUserName}
                 onChange={(e) => setEmailOrUserName(e.target.value)}
-                className="shadow appearance-none border border-login-inputBorder rounded w-full py-2 px-3 text-text-secondary bg-login-inputBg leading-tight focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-colors"
+                className="shadow appearance-none border border-login-inputBorder rounded w-full py-2 px-3 text-text-primary bg-login-inputBg leading-tight focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-colors"
                 required
               />
             </div>
             <div className="mb-4">
-              <label htmlFor="password"  className="block text-text-secondary text-sm font-bold mb-2">Contraseña</label>
+              <label htmlFor="password" className="block text-text-secondary text-sm font-bold mb-2">Contraseña</label>
               <div className="relative">
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="shadow appearance-none border border-login-inputBorder rounded w-full py-2 pl-3 pr-10 text-text-secondary bg-login-inputBg leading-tight focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-colors"
+                  className="shadow appearance-none border border-login-inputBorder rounded w-full py-2 pl-3 pr-10 text-text-primary bg-login-inputBg leading-tight focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-colors"
                   required
                 />
                 <button
@@ -124,16 +152,16 @@ const LoginPage: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center justify-start mb-6">
-                <label htmlFor="rememberMe" className="flex items-center text-sm text-text-secondary cursor-pointer select-none">
-                    <input
-                        id="rememberMe"
-                        type="checkbox"
-                        checked={rememberMe}
-                        onChange={(e) => setRememberMe(e.target.checked)}
-                        className="h-4 w-4 rounded border-login-inputBorder bg-login-inputBg text-accent focus:ring-accent/50 focus:ring-offset-surface"
-                    />
-                    <span className="ml-2">Recordarme</span>
-                </label>
+              <label htmlFor="rememberMe" className="flex items-center text-sm text-text-secondary cursor-pointer select-none">
+                <input
+                  id="rememberMe"
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="h-4 w-4 rounded border-login-inputBorder bg-login-inputBg text-accent focus:ring-accent/50 focus:ring-offset-surface"
+                />
+                <span className="ml-2">Recordarme</span>
+              </label>
             </div>
             <div className="flex items-center justify-between">
               <button

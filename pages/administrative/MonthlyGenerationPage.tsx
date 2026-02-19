@@ -29,7 +29,7 @@ const MonthlyGenerationPage: React.FC = () => {
     const [isGenerating, setIsGenerating] = useState(false);
 
     // Form management
-    const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormInputs>({
+    const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormInputs>({
         defaultValues: {
             TargetYear: new Date().getFullYear(),
             TargetMonth: new Date().getMonth() + 1,
@@ -53,6 +53,19 @@ const MonthlyGenerationPage: React.FC = () => {
             setLoading(p => ({ ...p, summary: false }));
         }
     }
+
+    // Auto-update Currency when Product changes
+    const watchedProductId = watch('ProductID');
+    useEffect(() => {
+        if (watchedProductId && products.length > 0) {
+            const selected = products.find(p => p.productID === watchedProductId);
+            if (selected) {
+                setValue('Moneda', selected.currency || 'VES');
+            }
+        }
+    }, [watchedProductId, products, setValue]);
+
+
 
     // Data fetching
     useEffect(() => {
@@ -174,7 +187,10 @@ const MonthlyGenerationPage: React.FC = () => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium">Moneda</label>
-                                <input {...register('Moneda', { required: true, maxLength: 3 })} className={inputClasses} />
+                                <select {...register('Moneda', { required: true })} className={inputClasses}>
+                                    <option value="VES">VES</option>
+                                    <option value="USD">USD</option>
+                                </select>
                             </div>
                         </div>
 

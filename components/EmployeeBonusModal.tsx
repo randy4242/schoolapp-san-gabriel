@@ -7,6 +7,8 @@ export type BonusItem = {
     isUsd: boolean;
     type: 'MANUAL' | 'GLOBAL';
     sourceFieldId?: string; // To link back to the global definition for sync deletion
+    deductionAmount?: number;
+    deductionReason?: string;
 };
 
 interface EmployeeBonusModalProps {
@@ -25,6 +27,8 @@ export const EmployeeBonusModal: React.FC<EmployeeBonusModalProps> = ({
     const [newBonusName, setNewBonusName] = useState('');
     const [newBonusAmount, setNewBonusAmount] = useState<number | ''>('');
     const [newBonusIsUsd, setNewBonusIsUsd] = useState(true);
+    const [newDeduction, setNewDeduction] = useState<number | ''>('');
+    const [newDeductionReason, setNewDeductionReason] = useState('');
 
     useEffect(() => {
         if (isOpen) {
@@ -32,6 +36,8 @@ export const EmployeeBonusModal: React.FC<EmployeeBonusModalProps> = ({
             setNewBonusName('');
             setNewBonusAmount('');
             setNewBonusIsUsd(true);
+            setNewDeduction('');
+            setNewDeductionReason('');
         }
     }, [isOpen, currentBonuses]);
 
@@ -45,12 +51,16 @@ export const EmployeeBonusModal: React.FC<EmployeeBonusModalProps> = ({
             name: newBonusName,
             amount: Number(newBonusAmount),
             isUsd: newBonusIsUsd,
-            type: 'MANUAL'
+            type: 'MANUAL',
+            deductionAmount: Number(newDeduction) || 0,
+            deductionReason: newDeductionReason || ''
         };
 
         setBonuses([...bonuses, newItem]);
         setNewBonusName('');
         setNewBonusAmount('');
+        setNewDeduction('');
+        setNewDeductionReason('');
     };
 
     const handleDelete = (id: string) => {
@@ -69,7 +79,8 @@ export const EmployeeBonusModal: React.FC<EmployeeBonusModalProps> = ({
     const getTotalVes = () => {
         return bonuses.reduce((acc, b) => {
             const amountVes = b.isUsd ? b.amount * activeRate : b.amount;
-            return acc + amountVes;
+            const dedVes = b.isUsd ? (b.deductionAmount || 0) * activeRate : (b.deductionAmount || 0);
+            return acc + (amountVes - dedVes);
         }, 0);
     };
 
@@ -117,6 +128,22 @@ export const EmployeeBonusModal: React.FC<EmployeeBonusModalProps> = ({
                                 +
                             </button>
                         </div>
+                        {/* Deducción Opcional */}
+                        <div className="flex space-x-2 mt-2">
+                            <input
+                                placeholder="Descuento (Opcional)"
+                                type="number"
+                                value={newDeduction}
+                                onChange={e => setNewDeduction(parseFloat(e.target.value) || '')}
+                                className={inputClasses + " w-32 bg-red-50"}
+                            />
+                            <input
+                                placeholder="Razón del Descuento"
+                                value={newDeductionReason}
+                                onChange={e => setNewDeductionReason(e.target.value)}
+                                className={inputClasses + " flex-1 bg-red-50"}
+                            />
+                        </div>
                     </div>
 
                     {/* List */}
@@ -134,7 +161,8 @@ export const EmployeeBonusModal: React.FC<EmployeeBonusModalProps> = ({
                                             </span>
                                             <span className="text-xs text-gray-500">
                                                 {formatMoney(bonus.amount, bonus.isUsd ? 'USD' : 'VES')}
-                                                {bonus.isUsd && ` (≈ ${formatMoney(bonus.amount * activeRate, 'VES')})`}
+                                                {bonus.deductionAmount ? ` - ${formatMoney(bonus.deductionAmount, bonus.isUsd ? 'USD' : 'VES')} (${bonus.deductionReason})` : ''}
+                                                {bonus.isUsd && ` (≈ ${formatMoney((bonus.amount - (bonus.deductionAmount || 0)) * activeRate, 'VES')})`}
                                             </span>
                                         </div>
                                     </div>

@@ -45,6 +45,7 @@ import CuentasPorCobrarPage from './pages/administrative/CuentasPorCobrarPage';
 import InvoicesListPage from './pages/administrative/InvoicesListPage';
 import MonthlyGenerationPage from './pages/administrative/MonthlyGenerationPage';
 import CreateMonthlyFeePage from './pages/administrative/CreateMonthlyFeePage';
+import ExchangeRatePage from './pages/administrative/ExchangeRatePage';
 import PurchaseListPage from './pages/administrative/PurchaseListPage';
 import PurchaseFormPage from './pages/administrative/PurchaseFormPage';
 import PayrollListPage from './pages/administrative/PayrollListPage';
@@ -55,9 +56,13 @@ import GLPostingPage from './pages/gl/GLPostingPage';
 import GeneralLedgerPage from './pages/gl/GeneralLedgerPage';
 import WithholdingListPage from './pages/withholdings/WithholdingListPage';
 import WithholdingFormPage from './pages/withholdings/WithholdingFormPage';
+
 import BoletaListPage from './pages/boletas/BoletaListPage';
 import BoletaFormPage from './pages/boletas/BoletaFormPage';
 import PlanEvaluacionPage from './pages/evaluations/PlanEvaluacionPage';
+import PlanListPage from './pages/boletas/PlanListPage';
+import PlanFormPage from './pages/boletas/PlanFormPage';
+import IndicatorsManagerPage from './pages/boletas/IndicatorsManagerPage';
 
 // Virtual Classroom Pages
 import MyCoursesPage from './pages/virtual/MyCoursesPage';
@@ -77,6 +82,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import ProfilePage from './pages/profile/ProfilePage';
 import NotificationListPage from './pages/notifications/NotificationListPage';
 import AssignDescriptiveGradesPage from './pages/evaluations/AssignDescriptiveGradesPage';
+import ParentPendingInvoicesPage from './pages/parents/ParentPendingInvoicesPage';
 import AiEvaluationPage from './pages/evaluations/AiEvaluationPage';
 
 const App: React.FC = () => {
@@ -175,6 +181,10 @@ const App: React.FC = () => {
             <Route path="boletas" element={<BoletaListPage />} />
             <Route path="boletas/create" element={<BoletaFormPage />} />
             <Route path="boletas/edit/:id" element={<BoletaFormPage />} />
+            <Route path="boletas/planes" element={<PlanListPage />} />
+            <Route path="boletas/planes/nuevo" element={<PlanFormPage />} />
+            <Route path="boletas/planes/editar/:id" element={<PlanFormPage />} />
+            <Route path="boletas/planes/:planId/indicadores" element={<IndicatorsManagerPage />} />
 
             {/* Products */}
             <Route path="products" element={<ProductListPage />} />
@@ -200,6 +210,7 @@ const App: React.FC = () => {
             <Route path="invoices" element={<InvoicesListPage />} />
             <Route path="administrative/monthly-generation" element={<MonthlyGenerationPage />} />
             <Route path="administrative/create-monthly-fee" element={<CreateMonthlyFeePage />} />
+            <Route path="administrative/exchange-rates" element={<ExchangeRatePage />} />
             <Route path="purchases" element={<PurchaseListPage />} />
             <Route path="purchases/create" element={<PurchaseFormPage />} />
             <Route path="payroll" element={<PayrollListPage />} />
@@ -215,6 +226,9 @@ const App: React.FC = () => {
 
             {/* Profile */}
             <Route path="profile" element={<ProfilePage />} />
+
+            {/* Payments/Parent */}
+            <Route path="parents/invoices" element={<ParentPendingInvoicesPage />} />
 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>

@@ -1,55 +1,56 @@
 export const theme = {
   colors: {
-    primary: '#003366', // Mapped from --main-blue
-    secondary: '#6c757d', // Kept as neutral gray
-    accent: '#FFC72C', // Mapped from --yellow
-    header: '#003366', // Mapped from --main-blue
+    primary: '#1c2e4b', // --main-blue
+    secondary: '#1d304e', // --light-blue
+    accent: '#93292c', // wine red
+    header: '#1c2e4b',
     
-    background: '#f3f4f6', // Kept as light gray
-    surface: '#ffffff', // Kept as white
+    background: '#f3f4f6', // gray-100
+    surface: '#ffffff',
     
     text: {
-      primary: '#1f2937', // Kept as dark gray for text
-      secondary: '#6b7280', // Kept
-      tertiary: '#9ca3af', // Kept
-      onPrimary: '#ffffff', // Correct for dark blue primary
-      onAccent: '#003366', // Text on yellow is dark blue
+      primary: '#1f2937', // gray-800
+      secondary: '#6b7280', // gray-500
+      tertiary: '#9ca3af', // gray-400
+      onPrimary: '#ffffff',
+      onAccent: '#ffffff',
     },
 
-    border: '#d1d5db', // Kept
-    borderDark: '#4b5563', // Kept
+    border: '#d1d5db', // gray-300
+    borderDark: '#4b5563', // gray-600
 
     danger: {
-      DEFAULT: '#D61616', // Mapped from --logout-red
-      light: '#fee2e2',
-      text: '#991b1b',
+      DEFAULT: '#93292c',
+      dark: '#7a2124',
+      light: '#fce8e8',
+      text: '#93292c',
     },
-    success: { // Kept green theme for success
-      DEFAULT: '#16a34a',
-      light: '#dcfce7',
-      text: '#14532d',
+    success: {
+      DEFAULT: '#16a34a', // green-600
+      light: '#dcfce7', // green-100
+      text: '#14532d', // green-800
     },
-    warning: { // Mapped to yellow
-      DEFAULT: '#FFC72C',
-      dark: '#f5b50b',
+    warning: {
+      DEFAULT: '#f59e0b', // amber-500
+      dark: '#d97706', // amber-600
     },
-    info: { // Mapped to light blue
-      DEFAULT: '#0066CC',
-      dark: '#004c99',
-      light: '#e6f0ff',
-      text: '#002a55',
+    info: {
+      DEFAULT: '#0ea5e9', // sky-500
+      dark: '#0369a1', // sky-700
+      light: '#e0f2fe', // sky-100
+      text: '#0c4a6e', // sky-800
     },
     
     sidebar: {
-      background: '#003366', // Mapped from --main-blue
-      text: '#e5e7eb', // Kept light gray for text
-      textHover: '#FFC72C', // Use accent for hover
-      border: '#002244', // Darker shade of main-blue
-      bgHover: '#004488' // Lighter blue for hover
+      background: '#1c2e4b',
+      text: '#e5e7eb', // gray-200
+      textHover: '#ffffff',
+      border: '#1d304e', // --light-blue
+      bgHover: '#1d304e' // --light-blue
     },
     login: {
-      inputBg: '#002244',
-      inputBorder: '#004488'
+      inputBg: '#f3f4f6',
+      inputBorder: '#d1d5db'
     }
   },
 };

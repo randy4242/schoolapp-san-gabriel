@@ -23,6 +23,7 @@ interface MonthlyFeeFormInputs {
         selected: boolean;
         applySubsidy: boolean;
         customPrice?: number | null;
+        subsidyPercentage?: number | null;
         isScholarship: boolean;
     }[];
 }
@@ -83,6 +84,38 @@ const CreateMonthlyFeePage: React.FC = () => {
         }
     }, [user?.schoolId]);
 
+    // Recalculate Subsidized Prices when Standard Price changes
+    useEffect(() => {
+        if (watchedAudiences) {
+            watchedAudiences.forEach((a, index) => {
+                // If subsidy is active and we have a percentage, update the fixed Price
+                if (a.applySubsidy && a.subsidyPercentage != null && watchedSalePrice > 0) {
+                    const newPrice = (watchedSalePrice * (a.subsidyPercentage / 100));
+                    // Only update if significantly different to avoid rounding loops or jitter
+                    if (Math.abs((a.customPrice || 0) - newPrice) > 0.01) {
+                        setValue(`audiences.${index}.customPrice`, Number(newPrice.toFixed(2)));
+                    }
+                }
+            });
+        }
+    }, [watchedSalePrice]);
+
+    const handlePercentageChange = (index: number, pct: number) => {
+        setValue(`audiences.${index}.subsidyPercentage`, pct);
+        if (watchedSalePrice > 0) {
+            const newPrice = (watchedSalePrice * (pct / 100));
+            setValue(`audiences.${index}.customPrice`, Number(newPrice.toFixed(2)));
+        }
+    };
+
+    const handleCustomPriceChange = (index: number, price: number) => {
+        setValue(`audiences.${index}.customPrice`, price);
+        if (watchedSalePrice > 0) {
+            const pct = (price / watchedSalePrice) * 100;
+            setValue(`audiences.${index}.subsidyPercentage`, Number(pct.toFixed(2)));
+        }
+    };
+
     const fetchData = async () => {
         if (!user?.schoolId) return;
         setIsLoadingParents(true);
@@ -101,12 +134,13 @@ const CreateMonthlyFeePage: React.FC = () => {
                 selected: false,
                 applySubsidy: false,
                 customPrice: null,
+                subsidyPercentage: null,
                 isScholarship: false
             })));
 
             // Load exchange rates
             const rates = await apiService.getExchangeRates(user.schoolId);
-            const current = rates.find(r => r.isActive && r.currencyTo === 'VES' && r.currencyFrom === 'USD'); // Assuming USD -> VES direction
+            const current = rates.find(r => r.isActive && r.toCurrency === 'VES' && r.fromCurrency === 'USD'); // Assuming USD -> VES direction
             if (current) {
                 setActiveRate(current);
             }
@@ -129,6 +163,7 @@ const CreateMonthlyFeePage: React.FC = () => {
             setValue(`audiences.${index}.selected`, false);
             setValue(`audiences.${index}.applySubsidy`, false);
             setValue(`audiences.${index}.customPrice`, null);
+            setValue(`audiences.${index}.subsidyPercentage`, null);
         }
     };
 
@@ -139,10 +174,11 @@ const CreateMonthlyFeePage: React.FC = () => {
 
         try {
             // Calculate final price based on currency
-            let finalSalePrice = data.salePrice;
-            if (currency === 'USD' && activeRate) {
-                finalSalePrice = data.salePrice * activeRate.rate;
-            }
+            let inputPrice = Number(data.salePrice) || 0;
+            // Removed frontend conversion. Backend now handles currency.
+            // if (currency === 'USD' && activeRate) {
+            //     finalSalePrice = inputPrice * activeRate.rate;
+            // }
 
             // Transform form data to payload
             const selectedAudiences = data.audiences.filter(a => a.selected && !a.isScholarship);
@@ -154,33 +190,34 @@ const CreateMonthlyFeePage: React.FC = () => {
             }
 
             const payloadAudiences = selectedAudiences.map(a => {
-                // Also convert custom price if subsidized
-                let finalCustomPrice = a.customPrice;
-                // NOTE: Assuming customPrice input respects the SAME currency as the main price for simplicity, 
-                // or we could force customPrice to always be in base currency.
-                // Given the complexities, let's assume customPrice is always entered in the selected currency too.
-                if (a.applySubsidy && typeof a.customPrice === 'number' && currency === 'USD' && activeRate) {
-                    finalCustomPrice = a.customPrice * activeRate.rate;
-                }
+                // Also convert custom price if subsidized -- Wait, should custom price also be raw?
+                // Yes, if the product is USD, the custom price should be in USD.
+                let valStart = Number(a.customPrice) || 0;
+
+                // Removed conversion for custom price too
+                // if (a.applySubsidy && currency === 'USD' && activeRate) {
+                //     finalCustomPrice = valStart * activeRate.rate;
+                // }
 
                 return {
                     targetID: a.userId,
                     targetType: "User" as const,
-                    customPrice: a.applySubsidy ? finalCustomPrice : null
+                    customPrice: a.applySubsidy ? valStart : null
                 };
             });
 
             const payload = {
                 name: data.name,
                 description: data.description,
-                salePrice: finalSalePrice,
+                salePrice: inputPrice, // Send raw price
                 audiences: payloadAudiences,
                 // Hidden automatic fields
                 sku: "MENS-" + Date.now(),
                 costPrice: 0,
                 type: "S",
                 isActive: true,
-                schoolID: user.schoolId
+                schoolID: user.schoolId,
+                currency: currency // Add selected currency
             };
 
             const response = await fetch(`https://santarosasis.somee.com/api/products/generate-monthly-fee`, {
@@ -224,6 +261,25 @@ const CreateMonthlyFeePage: React.FC = () => {
                     {submitError}
                 </div>
             )}
+
+            {/* Exchange Rate Banner */}
+            <div className="bg-surface p-4 rounded-lg shadow-sm border border-border mb-6 flex items-center justify-between">
+                <div>
+                    <h3 className="text-sm font-semibold text-text-secondary uppercase">Tasa de Cambio (USD → VES)</h3>
+                    <div className="flex items-center mt-1">
+                        <p className="text-2xl font-bold text-accent mr-4">
+                            {activeRate ? activeRate.rate.toLocaleString('es-VE') : 'No establecida'}
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setIsRateModalOpen(true)}
+                            className="text-sm text-primary hover:underline"
+                        >
+                            {activeRate ? 'Modificar' : 'Definir Tasa'}
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                 {/* General Info */}
@@ -377,17 +433,31 @@ const CreateMonthlyFeePage: React.FC = () => {
                                                     </div>
 
                                                     {watchedAudiences[index]?.applySubsidy && (
-                                                        <div className="w-32">
-                                                            <input
-                                                                type="number"
-                                                                step="0.01"
-                                                                placeholder="Precio Esp."
-                                                                {...register(`audiences.${index}.customPrice`, {
-                                                                    valueAsNumber: true,
-                                                                    required: watchedAudiences[index]?.applySubsidy ? "Requerido" : false
-                                                                })}
-                                                                className="p-1 px-2 border border-border rounded w-full text-sm"
-                                                            />
+                                                        <div className="flex space-x-2 animate-fadeIn">
+                                                            <div className="w-24 relative">
+                                                                <input
+                                                                    type="number"
+                                                                    placeholder="%"
+                                                                    step="0.1"
+                                                                    min="0"
+                                                                    max="100"
+                                                                    value={watchedAudiences[index]?.subsidyPercentage ?? ''}
+                                                                    onChange={(e) => handlePercentageChange(index, parseFloat(e.target.value))}
+                                                                    className="p-1 px-2 border border-border rounded w-full text-sm pr-6" />
+                                                                <span className="absolute right-2 top-1 text-gray-500 text-xs font-bold">%</span>
+                                                            </div>
+                                                            <div className="w-32">
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    placeholder="Precio Esp."
+                                                                    value={watchedAudiences[index]?.customPrice ?? ''}
+                                                                    onChange={(e) => handleCustomPriceChange(index, parseFloat(e.target.value))}
+                                                                    className="p-1 px-2 border border-border rounded w-full text-sm font-bold text-green-700"
+                                                                />
+                                                            </div>
+                                                            {/* Hidden register to keep form validation happy if needed, though we control values manually now */}
+                                                            <input type="hidden" {...register(`audiences.${index}.customPrice`, { required: watchedAudiences[index]?.applySubsidy })} />
                                                         </div>
                                                     )}
                                                 </div>

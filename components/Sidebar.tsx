@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../hooks/useTheme';
 import { ChevronDownIcon, LogoutIcon, HomeIcon, UsersIcon, BookOpenIcon, SchoolIcon, ClipboardListIcon, LinkIcon, BeakerIcon, CalendarIcon, DocumentTextIcon, CreditCardIcon, CubeIcon, BellIcon, UserCheckIcon, ChartBarIcon, DocumentReportIcon, HistoryIcon, UserCircleIcon, ClipboardCheckIcon, CashIcon, ShoppingCartIcon, BriefcaseIcon, TrendingUpIcon, LedgerIcon, PercentageIcon, PlusIcon, ChatAltIcon, CloudUploadIcon } from './icons';
 
 interface NavLink {
@@ -26,6 +27,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   const { user, logout, hasPermission } = useAuth();
+  const { currentColors } = useTheme();
   const location = useLocation();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
@@ -115,13 +117,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       links: [
         { to: '/boletas', label: 'Ver Boletas', icon: <span />, permission: (has) => has([6, 7, 2, 9, 10, 3, 1]) },
         { to: '/boletas/create', label: 'Crear Boleta', icon: <span />, permission: (has) => has([6, 7, 2, 9, 10]) },
+        { to: '/boletas/planes', label: 'Planes de Evaluación', icon: <span />, permission: (has) => has([6, 7]) },
       ].filter(l => l.permission(Is))
     },
     {
       label: 'Administrativo',
       icon: <DocumentReportIcon />,
-      permission: (has) => has([6, 7]),
+      permission: (has) => has([6, 7, 3]), // Added role 3 (Parent)
       links: [
+        { to: '/parents/invoices', label: 'Mis Facturas', icon: <CashIcon />, permission: (has) => has([3]) }, // Parent link
         { to: '/cxc', label: 'Cuentas Por Cobrar', icon: <CashIcon />, permission: (has) => has([6, 7]) },
         { to: '/invoices', label: 'Cuentas Generales', icon: <ClipboardListIcon />, permission: (has) => has([6, 7]) },
         { to: '/purchases', label: 'Compras', icon: <ShoppingCartIcon />, permission: (has) => has([6, 7]) },
@@ -129,6 +133,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
         { to: '/withholdings', label: 'Retenciones', icon: <PercentageIcon />, permission: (has) => has([6, 7]) },
         { to: '/administrative/create-monthly-fee', label: 'Generar Mensualidad', icon: <CalendarIcon />, permission: (has) => has([6, 7]) },
         { to: '/administrative/monthly-generation', label: 'Generación Mensual', icon: <CalendarIcon />, permission: (has) => has([6, 7]) },
+        { to: '/administrative/exchange-rates', label: 'Tasa de Cambio', icon: <CashIcon />, permission: (has) => has([6, 7]) },
       ].filter(l => l.permission(Is))
     },
     {
@@ -188,9 +193,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
         aria-hidden="true"
       ></div>
       <div className={sidebarClasses}>
-        <div className="p-4 border-b border-sidebar-border flex-shrink-0">
-          <h1 className="text-xl font-bold text-accent">SchoolApp</h1>
-          <span className="text-sm text-sidebar-text truncate">{user?.email}</span>
+        <div className="p-4 border-b border-sidebar-border flex-shrink-0 flex flex-col items-center">
+          <img src={currentColors.logoUrl} alt="School Logo" className="w-24 mb-2" />
+          <span className="text-sm text-sidebar-text truncate text-center">{user?.email}</span>
         </div>
         <nav className="flex-1 px-2 py-4 space-y-2 overflow-y-auto">
           <Link to="/dashboard" className="flex items-center px-4 py-2 text-sidebar-text hover:bg-sidebar-bgHover rounded-md">

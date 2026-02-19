@@ -11,7 +11,7 @@ const ResumenFinalEmgReport: React.FC<ResumenFinalEmgReportProps> = ({ data, cla
     
     const studentRows = Array.from({ length: 35 }, (_, i) => {
         const student = data.rows.find(s => s.nro === i + 1);
-        // The number of subject columns should be exactly 9, padding if necessary
+        // The number of subject columns should be exactly 9, padding if necessary (comentario para publicar vercel)
         const subjectCells = student ? student.subjectCells : [];
         const paddedSubjectCells = [...subjectCells, ...Array(Math.max(0, 9 - subjectCells.length)).fill('')];
 

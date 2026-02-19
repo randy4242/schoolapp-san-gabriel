@@ -9,21 +9,21 @@ import { useAuth } from '../../hooks/useAuth';
 import { apiService } from '../../services/apiService';
 
 interface BoletaReportProps {
-  data: Certificate;
-  templateRef: React.RefObject<HTMLDivElement>;
+    data: Certificate;
+    templateRef: React.RefObject<HTMLDivElement>;
 }
 
 // --- NUEVO COMPONENTE DE ÍCONO (TU SVG) ---
 const CrossMarkIcon = () => (
-    <svg 
-        xmlns="http://www.w3.org/2000/svg" 
-        fill="#000000" 
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="#000000"
         width="14px" // Ajustado para que se vea bien en la celda
-        height="14px" 
+        height="14px"
         viewBox="0 0 1024 1024"
         style={{ display: 'inline-block', verticalAlign: 'middle' }} // Alineación
     >
-        <path d="M697.4 759.2l61.8-61.8L573.8 512l185.4-185.4-61.8-61.8L512 450.2 326.6 264.8l-61.8 61.8L450.2 512 264.8 697.4l61.8 61.8L512 573.8z"/>
+        <path d="M697.4 759.2l61.8-61.8L573.8 512l185.4-185.4-61.8-61.8L512 450.2 326.6 264.8l-61.8 61.8L450.2 512 264.8 697.4l61.8 61.8L512 573.8z" />
     </svg>
 );
 
@@ -46,7 +46,7 @@ const flattenText = (text: string | undefined | null) => {
 // PRE-SCHOOL Options
 const PRESCHOOL_GRADE_OPTIONS = ["Consolidado", "En proceso", "Iniciado", "Sin Evidencias"];
 
-const SectionTable: React.FC<{section: IndicatorSection, sectionIndex: number, gradesData: Record<string, any>}> = ({section, sectionIndex, gradesData}) => (
+const SectionTable: React.FC<{ section: IndicatorSection, sectionIndex: number, gradesData: Record<string, any> }> = ({ section, sectionIndex, gradesData }) => (
     <div className="break-inside-avoid">
         <h3 className="text-center font-bold bg-gray-200 border-t-2 border-b-2 border-black p-1 text-xs">{section.title}</h3>
         <table className="w-full border-collapse text-xs">
@@ -54,7 +54,7 @@ const SectionTable: React.FC<{section: IndicatorSection, sectionIndex: number, g
                 <tr className="bg-gray-100">
                     <th className="border border-black p-1 w-2/3 text-left font-bold">Indicadores</th>
                     {PRESCHOOL_GRADE_OPTIONS.map(option => (
-                            <th key={option} className="border border-black p-1 font-bold">{option}</th>
+                        <th key={option} className="border border-black p-1 font-bold">{option}</th>
                     ))}
                 </tr>
             </thead>
@@ -93,9 +93,9 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
         cedula: ''
     });
     const [resolvedStudentName, setResolvedStudentName] = useState(data.studentName || 'N/A');
-    
+
     let parsedContent: { level: string, data: Record<string, any>, attendance: any, turno: string, schoolName?: string, lapso?: Lapso } = { level: '', data: {}, attendance: null, turno: '', schoolName: '', lapso: undefined };
-    
+
     try {
         if (data.content) {
             // Clean the content string before parsing to handle status tags
@@ -122,7 +122,7 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
                         // Instead, fetch their children list to find the correct student name.
                         const children = await apiService.getChildrenOfParent(authUser.userId, authUser.schoolId);
                         const child = children.find(c => c.userID === data.userId);
-                        
+
                         // Fallback to fetch just the user to get C.E if child object doesn't have it
                         let cedula = 'N/A';
                         if (child) {
@@ -137,18 +137,18 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
 
                         setExtraData({
                             loading: false,
-                            cedula: cedula, 
+                            cedula: cedula,
                             parentName: authUser.userName,
                             teacherName: data.signatoryName || 'Docente',
                             teacherCedula: ''
                         });
-                    } 
+                    }
                     // Logic for Admin/Teachers
                     else if (isPrimaryGrade) {
                         // Use optional chaining to avoid crashes if getUserDetails returns null
                         const details = await apiService.getUserDetails(data.userId, authUser.schoolId).catch(() => null);
                         const parents = await apiService.getParentsOfChild(data.userId, authUser.schoolId).catch(() => []);
-                        
+
                         // --- Teacher Info Logic ---
                         // Initialize with what we have in the boleta (Signatory Name)
                         let teacherName = data.signatoryName || 'N/A';
@@ -159,7 +159,7 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
                             const allCourses = await apiService.getCourses(authUser.schoolId);
                             // Find the course associated with this classroom (typically the main grade course)
                             const classroomCourse = allCourses.find(c => c.classroomID === details.classroom?.classroomID);
-                            
+
                             if (classroomCourse?.userID) {
                                 try {
                                     const teacher = await apiService.getUserById(classroomCourse.userID, authUser.schoolId);
@@ -202,13 +202,13 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
                         // Preschool/General for Staff
                         let studentCedula = 'N/A';
                         try {
-                             const u = await apiService.getUserById(data.userId, authUser.schoolId);
-                             setResolvedStudentName(u.userName);
-                             studentCedula = u.cedula || 'N/A';
-                        } catch {}
+                            const u = await apiService.getUserById(data.userId, authUser.schoolId);
+                            setResolvedStudentName(u.userName);
+                            studentCedula = u.cedula || 'N/A';
+                        } catch { }
 
-                        setExtraData({ 
-                            loading: false, 
+                        setExtraData({
+                            loading: false,
                             teacherName: data.signatoryName || '',
                             teacherCedula: '',
                             parentName: '',
@@ -222,7 +222,7 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
             };
             fetchExtraData();
         } else {
-            setExtraData(prev => ({...prev, loading: false }));
+            setExtraData(prev => ({ ...prev, loading: false }));
         }
     }, [isPrimaryGrade, authUser, data.userId, data.signatoryName, data.studentName]);
 
@@ -240,25 +240,27 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
         if (normalizedLevel === 'Sexto Grado') return SEXTO_GRADO_INDICATORS;
         return [];
     };
-    
-    const indicators = getIndicators(level);
-    
+
+    const indicators = (gradesData?.indicatorStructure as IndicatorSection[])?.length > 0
+        ? (gradesData.indicatorStructure as IndicatorSection[])
+        : getIndicators(level);
+
     // Common Components
     const ReportHeader: React.FC = () => {
         // Specific customization for School ID 8 "Los Tulipanes"
         const isLosTulipanes = data.schoolId === 8;
         const defaultSchoolName = parsedContent.schoolName || 'Mons. Luis Eduardo Henríquez';
-        
-        const schoolTitle = isLosTulipanes 
-            ? 'Centro de Educación Inicial "Los Tulipanes"' 
+
+        const schoolTitle = isLosTulipanes
+            ? 'Centro de Educación Inicial "Los Tulipanes"'
             : `Complejo Educativo "${defaultSchoolName}"`;
-            
-        const deaCode = isLosTulipanes 
-            ? 'OD76980812' 
+
+        const deaCode = isLosTulipanes
+            ? 'OD76980812'
             : 'OD16020812';
 
         return (
-             <div className="flex justify-between items-start mb-2 text-xs">
+            <div className="flex justify-between items-start mb-2 text-xs">
                 <div className="w-1/4"><img src="https://jfywkgbqxijdfwqsscqa.supabase.co/storage/v1/object/public/assets/Alcaldia%20San%20Diego%20logo%20azul.png" alt="Alcaldia de San Diego" className="w-40" /></div>
                 <div className="w-1/2 text-center leading-tight">
                     <p>República Bolivariana de Venezuela</p>
@@ -290,7 +292,7 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
             </div>
         </div>
     );
-    
+
     // Preschool Components
     const PreschoolStudentInfo: React.FC<{ showFeatures: boolean }> = ({ showFeatures }) => {
         // Use manual inputs preferentially
@@ -298,12 +300,12 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
         const manualInasistencias = gradesData['manualInasistencias'];
         const diasHabilesSaved = gradesData['diasHabiles'];
 
-        const diasAsistidos = (manualAsistencias !== undefined && manualAsistencias !== null) 
-            ? String(manualAsistencias) 
+        const diasAsistidos = (manualAsistencias !== undefined && manualAsistencias !== null)
+            ? String(manualAsistencias)
             : '';
 
-        const diasInasistentes = (manualInasistencias !== undefined && manualInasistencias !== null) 
-            ? String(manualInasistencias) 
+        const diasInasistentes = (manualInasistencias !== undefined && manualInasistencias !== null)
+            ? String(manualInasistencias)
             : '';
 
         const totalRegistrado = (diasHabilesSaved !== undefined && diasHabilesSaved !== null && String(diasHabilesSaved).trim() !== '')
@@ -313,18 +315,18 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
         const numAsistidos = parseFloat(diasAsistidos);
         const numInasistentes = parseFloat(diasInasistentes);
         const numTotal = Number(totalRegistrado);
-        
+
         const hasAsistencia = !isNaN(numAsistidos) && diasAsistidos !== '';
         const hasInasistencia = !isNaN(numInasistentes) && diasInasistentes !== '';
 
-        const porcentajeAsistencia = (numTotal > 0 && hasAsistencia) 
-            ? ((numAsistidos / numTotal) * 100).toFixed(1) + '%' 
+        const porcentajeAsistencia = (numTotal > 0 && hasAsistencia)
+            ? ((numAsistidos / numTotal) * 100).toFixed(1) + '%'
             : '';
-            
-        const porcentajeInasistencia = (numTotal > 0 && hasInasistencia) 
-            ? ((numInasistentes / numTotal) * 100).toFixed(1) + '%' 
+
+        const porcentajeInasistencia = (numTotal > 0 && hasInasistencia)
+            ? ((numInasistentes / numTotal) * 100).toFixed(1) + '%'
             : '';
-        
+
         return (
             <div className="p-2 pb-1 text-xs">
                 <div className="flex justify-between items-center font-bold mb-2">
@@ -354,8 +356,8 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
     }
     const PreschoolPage: React.FC<{ pageNumber: number, totalPages: number }> = ({ pageNumber, totalPages }) => {
         const sectionsForPage = indicators.filter((_, index) => {
-            if (pageNumber === 1) return index < 1; 
-            if (pageNumber === 2) return index >= 1; 
+            if (pageNumber === 1) return index < 1;
+            if (pageNumber === 2) return index >= 1;
             return false;
         });
 
@@ -366,13 +368,13 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
                 <ReportHeader />
                 <div className="border-2 border-black flex-grow flex flex-col">
                     <PreschoolStudentInfo showFeatures={pageNumber === 1} />
-                    
+
                     <div className="flex-grow">
                         {sectionsForPage.map((section, index) => {
                             const originalIndex = indicators.findIndex(s => s.title === section.title);
                             return <SectionTable key={originalIndex} section={section} sectionIndex={originalIndex} gradesData={gradesData} />;
                         })}
-                        
+
                         {pageNumber === 2 && indicators.some(s => s.hasRecommendations) && (
                             <div className="border-t-2 border-black p-1 text-xs text-justify leading-snug">
                                 <span className="font-bold inline">Recomendaciones:</span>
@@ -382,7 +384,7 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
                     </div>
 
                     <div className="border-t-2 border-black">
-                         <div className="flex h-16 text-xs">
+                        <div className="flex h-16 text-xs">
                             <div className="w-1/3 border-r-2 border-black relative">
                                 <div className="absolute top-1 left-1 font-bold">Representante:</div>
                                 <div className="absolute bottom-1 left-1 font-bold">Firma:</div>
@@ -410,24 +412,24 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
         const manualInasistencias = gradesData['manualInasistencias'];
         const diasHabilesSaved = gradesData['diasHabiles'];
 
-        const diasAsistidos = (manualAsistencias !== undefined && manualAsistencias !== null) 
-            ? String(manualAsistencias) 
+        const diasAsistidos = (manualAsistencias !== undefined && manualAsistencias !== null)
+            ? String(manualAsistencias)
             : '';
 
-        const diasInasistentes = (manualInasistencias !== undefined && manualInasistencias !== null) 
-            ? String(manualInasistencias) 
+        const diasInasistentes = (manualInasistencias !== undefined && manualInasistencias !== null)
+            ? String(manualInasistencias)
             : '';
 
         const totalRegistrado = (diasHabilesSaved !== undefined && diasHabilesSaved !== null && String(diasHabilesSaved).trim() !== '')
-            ? String(diasHabilesSaved) 
+            ? String(diasHabilesSaved)
             : ((Number(diasAsistidos) || 0) + (Number(diasInasistentes) || 0));
-        
+
         // Teacher Display Logic
         // 1. Primary Teacher (Auto) - From fetchExtraData
         const tName = extraData.teacherName;
         const tCedula = extraData.teacherCedula;
-        let finalTeacherDisplay = tCedula && tCedula !== 'N/A' && tCedula !== '' 
-            ? `${tName} (C.I. ${tCedula})` 
+        let finalTeacherDisplay = tCedula && tCedula !== 'N/A' && tCedula !== ''
+            ? `${tName} (C.I. ${tCedula})`
             : tName;
 
         // 2. Additional Teacher (Manual) - From gradesData
@@ -449,23 +451,23 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
                     <tr className="text-center"><td colSpan={4} className="p-0">INSTRUMENTO DE EVALUACIÓN DE EDUCACIÓN PRIMARIA</td></tr>
                     <tr className="text-center"><td colSpan={4} className="p-0">{level?.toUpperCase()}</td></tr>
                     <tr className="text-center"><td colSpan={4} className="p-0">{lapso?.nombre || "PRIMER MOMENTO"} AÑO ESCOLAR {new Date(lapso?.fechaInicio || Date.now()).getFullYear()}-{new Date(lapso?.fechaFin || Date.now()).getFullYear()}</td></tr>
-                    
+
                     <tr><td colSpan={4} className="h-1"></td></tr>
-                    
+
                     <tr>
                         <td className="w-1/6 p-0">Estudiante:</td>
                         <td className="w-2/5 border-b border-black font-normal p-0">{resolvedStudentName}</td>
                         <td className="w-1/12 text-right pr-1 p-0">C.E.</td>
                         <td className="w-1/4 border-b border-black font-normal p-0">{extraData.cedula}</td>
                     </tr>
-                    
+
                     <tr className="pt-1">
                         <td className="p-0">Docente:</td>
                         <td className="border-b border-black font-normal p-0">{finalTeacherDisplay}</td>
                         <td className="text-right pr-1 p-0">Rep:</td>
                         <td className="border-b border-black font-normal p-0">{extraData.parentName}</td>
                     </tr>
-                    
+
                     <tr className="pt-1">
                         <td className="p-0">INICIO:</td>
                         <td className="border-b border-black font-normal p-0">{lapso ? new Date(lapso.fechaInicio).toLocaleDateString('es-ES') : ''}</td>
@@ -475,10 +477,10 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
                 </tbody>
             </table>
         );
-        
-        const PrimaryGradeIndicatorsTable: React.FC<{indicators: IndicatorSection[], gradesData: Record<string, any> }> = ({ indicators, gradesData }) => {
+
+        const PrimaryGradeIndicatorsTable: React.FC<{ indicators: IndicatorSection[], gradesData: Record<string, any> }> = ({ indicators, gradesData }) => {
             const GRADE_COLUMNS = ["C.", "E.P.", "I.", "C.A."];
-            
+
             return (
                 <table className="w-full border-collapse border-2 border-black text-xs my-1">
                     <thead>
@@ -526,23 +528,23 @@ const BoletaReport: React.FC<BoletaReportProps> = ({ data, templateRef }) => {
                 </table>
             );
         };
-        
+
         return (
             <div className="p-6" style={{ width: '216mm', height: '279mm', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', fontSize: '9pt' }}>
                 <ReportHeader />
                 {extraData.loading ? <p>Cargando datos adicionales...</p> : <GradeHeader />}
                 <div className="space-y-1">
-                     <PrimaryGradeIndicatorsTable 
-                        indicators={indicators} 
-                        gradesData={gradesData} 
-                     />
+                    <PrimaryGradeIndicatorsTable
+                        indicators={indicators}
+                        gradesData={gradesData}
+                    />
                 </div>
-                 <div className="mt-0 text-xs space-y-0 mb-0 flex-grow flex flex-col">
+                <div className="mt-0 text-xs space-y-0 mb-0 flex-grow flex flex-col">
                     <div className="flex-1 flex flex-col">
                         <h4 className="font-bold">Actitudes, Hábitos de Trabajo:</h4>
                         <p className="border border-black p-1 break-words whitespace-pre-wrap flex-grow text-[9px] leading-tight">{flattenText(gradesData['actitudesHabitos'])}</p>
                     </div>
-                     <div className="flex-1 flex flex-col">
+                    <div className="flex-1 flex flex-col">
                         <h4 className="font-bold">Recomendaciones:</h4>
                         <p className="border border-black p-1 break-words whitespace-pre-wrap flex-grow text-[9px] leading-tight">{flattenText(gradesData['recomendacionesDocente'])}</p>
                     </div>

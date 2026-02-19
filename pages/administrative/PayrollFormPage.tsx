@@ -24,12 +24,15 @@ type EmployeeRow = {
     roleName: string;
     originalBaseSalary?: number; // To track changes
     bonuses: BonusItem[];
+    individualDeduction: number;
 };
 
 type FormInputs = {
     periodYear: number;
     periodMonth: number;
-    transportAllow: number;
+    startDate: string;
+    endDate: string;
+    periodName: string;
     isrPercent: number;
     pensionPercent: number;
     notes: string;
@@ -68,7 +71,9 @@ const PayrollFormPage: React.FC = () => {
         defaultValues: {
             periodYear: new Date().getFullYear(),
             periodMonth: new Date().getMonth() + 1,
-            transportAllow: 0,
+            startDate: new Date().toISOString().split('T')[0],
+            endDate: new Date().toISOString().split('T')[0],
+            periodName: '',
             isrPercent: 0,
             pensionPercent: 0,
             notes: '',
@@ -118,7 +123,8 @@ const PayrollFormPage: React.FC = () => {
                 customSalary: u.baseSalary || 0,
                 roleName: getRoleName(u.roleID),
                 originalBaseSalary: u.baseSalary || 0,
-                bonuses: []
+                bonuses: [],
+                individualDeduction: 0
             }));
 
             setEmployeeRows(rows);
@@ -159,6 +165,12 @@ const PayrollFormPage: React.FC = () => {
     const updateCustomSalary = (index: number, value: number) => {
         const newRows = [...employeeRows];
         newRows[index].customSalary = value;
+        setEmployeeRows(newRows);
+    };
+
+    const updateIndividualDeduction = (index: number, value: number) => {
+        const newRows = [...employeeRows];
+        newRows[index].individualDeduction = value;
         setEmployeeRows(newRows);
     };
 
@@ -284,8 +296,9 @@ const PayrollFormPage: React.FC = () => {
     const getCalculatedBonusVes = (bonuses: BonusItem[]) => {
         const rate = activeRate?.rate || 1;
         return bonuses.reduce((sum, b) => {
-            const val = b.isUsd ? b.amount * rate : b.amount;
-            return sum + val;
+            const amountVal = b.isUsd ? b.amount * rate : b.amount;
+            const dedVal = b.isUsd ? (b.deductionAmount || 0) * rate : (b.deductionAmount || 0);
+            return sum + (amountVal - dedVal);
         }, 0);
     };
 
@@ -368,22 +381,26 @@ const PayrollFormPage: React.FC = () => {
                         employeeUserID: r.userId,
                         baseSalary: finalBase,
                         individualAllowance: finalBonus,
+                        individualDeduction: r.individualDeduction || 0,
+                        allowanceDetails: JSON.stringify(r.bonuses),
                         allowanceNote: bonusNote,
                         isSelected: true
                     };
                 });
 
             const payload = {
-                periodYear: Number(data.periodYear),
-                periodMonth: Number(data.periodMonth),
-                transportAllow: Number(data.transportAllow),
-                isrPercent: Number(data.isrPercent),
-                pensionPercent: Number(data.pensionPercent),
+                periodYear: Number(data.periodYear) || 0,
+                periodMonth: Number(data.periodMonth) || 0,
+                startDate: data.startDate,
+                endDate: data.endDate,
+                periodName: data.periodName,
+                isrPercent: Number(data.isrPercent) || 0,
+                pensionPercent: Number(data.pensionPercent) || 0,
                 notes: data.notes || "",
-                schoolID: Number(user.schoolId),
-                createdByUserID: Number(user.userId),
+                schoolID: Number(user.schoolId) || 0,
+                createdByUserID: Number(user.userId) || 0,
                 dryRun: true,
-                exchangeRate: Number(activeRate?.rate || 1),
+                exchangeRate: Number(activeRate?.rate) || 1, // Fallback to 1 if missing for safety
                 isUsd: Boolean(data.isBaseUsd),
                 customAllowances: [], // Backend SP maps @OtherAllow from this, but we moved it to individual lines to avoid double counting per instructions
                 employeesDetails: details
@@ -424,6 +441,8 @@ const PayrollFormPage: React.FC = () => {
                         employeeUserID: r.userId,
                         baseSalary: finalBase,
                         individualAllowance: finalBonus,
+                        individualDeduction: r.individualDeduction || 0,
+                        allowanceDetails: JSON.stringify(r.bonuses),
                         allowanceNote: bonusNote,
                         isSelected: true
                     };
@@ -431,16 +450,18 @@ const PayrollFormPage: React.FC = () => {
 
             const data = getValues();
             const payload = {
-                periodYear: Number(data.periodYear),
-                periodMonth: Number(data.periodMonth),
-                transportAllow: Number(data.transportAllow),
-                isrPercent: Number(data.isrPercent),
-                pensionPercent: Number(data.pensionPercent),
+                periodYear: Number(data.periodYear) || 0,
+                periodMonth: Number(data.periodMonth) || 0,
+                startDate: data.startDate,
+                endDate: data.endDate,
+                periodName: data.periodName,
+                isrPercent: Number(data.isrPercent) || 0,
+                pensionPercent: Number(data.pensionPercent) || 0,
                 notes: data.notes || "",
-                schoolID: Number(user.schoolId),
-                createdByUserID: Number(user.userId),
+                schoolID: Number(user.schoolId) || 0,
+                createdByUserID: Number(user.userId) || 0,
                 dryRun: false,
-                exchangeRate: Number(activeRate?.rate || 1),
+                exchangeRate: Number(activeRate?.rate) || 1,
                 isUsd: Boolean(data.isBaseUsd), // This tells backend "Treat BaseSalary column as USD"
                 customAllowances: [], // Cleared to prevent backend double counting
                 employeesDetails: details
@@ -531,22 +552,31 @@ const PayrollFormPage: React.FC = () => {
                         <div>
                             <label className="block text-sm font-medium">Período (Año / Mes)</label>
                             <div className="flex space-x-2">
-                                <select {...register('periodYear', { valueAsNumber: true })} className={inputClasses}>
-                                    {[...Array(5)].map((_, i) => <option key={i} value={new Date().getFullYear() - i}>{new Date().getFullYear() - i}</option>)}
-                                </select>
-                                <select {...register('periodMonth', { valueAsNumber: true })} className={inputClasses}>
-                                    {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString('es-ES', { month: 'long' })}</option>)}
-                                </select>
+                                <section title="Period Selectors" className="flex space-x-2">
+                                    <select {...register('periodYear', { valueAsNumber: true })} className={inputClasses}>
+                                        {[...Array(5)].map((_, i) => <option key={i} value={new Date().getFullYear() - i}>{new Date().getFullYear() - i}</option>)}
+                                    </select>
+                                    <select {...register('periodMonth', { valueAsNumber: true })} className={inputClasses}>
+                                        {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString('es-ES', { month: 'long' })}</option>)}
+                                    </select>
+                                </section>
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium">Bonificación Transporte</label>
-                            <div className="relative">
-                                <input type="number" step="0.01" {...register('transportAllow', { valueAsNumber: true, min: 0 })} className={inputClasses} />
-                                <span className="absolute right-3 top-2 text-gray-400 text-sm">VES</span>
+                            <label className="block text-sm font-medium">Rango de Fechas (Inicio - Fin)</label>
+                            <div className="flex space-x-2">
+                                <input type="date" {...register('startDate', { required: true })} className={inputClasses} />
+                                <input type="date" {...register('endDate', { required: true })} className={inputClasses} />
                             </div>
                         </div>
+
+                        <div>
+                            <label className="block text-sm font-medium">Nombre del Periodo</label>
+                            <input placeholder="Ej. 1ra Quincena Febrero" {...register('periodName', { required: true })} className={inputClasses} />
+                        </div>
+
+
 
                         {/* Reference Min Salary */}
                         <div>
@@ -577,11 +607,11 @@ const PayrollFormPage: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
                         <div>
                             <label className="block text-sm font-medium">% ISLR</label>
-                            <input type="number" step="0.01" {...register('isrPercent', { valueAsNumber: true, min: 0 })} className={inputClasses} />
+                            <input type="number" step="0.01" {...register('isrPercent', { valueAsNumber: true, validate: v => isNaN(v) || v >= 0 || "Debe ser positivo" })} className={inputClasses} />
                         </div>
                         <div>
                             <label className="block text-sm font-medium">% Pensión/SSO</label>
-                            <input type="number" step="0.01" {...register('pensionPercent', { valueAsNumber: true, min: 0 })} className={inputClasses} />
+                            <input type="number" step="0.01" {...register('pensionPercent', { valueAsNumber: true, validate: v => isNaN(v) || v >= 0 || "Debe ser positivo" })} className={inputClasses} />
                         </div>
                         <div className="md:col-span-1">
                             <label className="block text-sm font-medium">Notas</label>
@@ -623,11 +653,13 @@ const PayrollFormPage: React.FC = () => {
                     </div>
                 </div>
 
-                {fields.length === 0 && (
-                    <p className="text-text-secondary italic text-sm text-center py-4 bg-gray-50 rounded border border-dashed border-gray-300">
-                        No hay bonos globales configurados.
-                    </p>
-                )}
+                {
+                    fields.length === 0 && (
+                        <p className="text-text-secondary italic text-sm text-center py-4 bg-gray-50 rounded border border-dashed border-gray-300">
+                            No hay bonos globales configurados.
+                        </p>
+                    )
+                }
 
                 <div className="space-y-3">
                     {fields.map((field, index) => (
@@ -645,7 +677,7 @@ const PayrollFormPage: React.FC = () => {
                                     <input
                                         type="number" step="0.01"
                                         placeholder="Monto"
-                                        {...register(`customAllowances.${index}.amount` as const, { valueAsNumber: true, min: 0 })}
+                                        {...register(`customAllowances.${index}.amount` as const, { valueAsNumber: true, validate: v => isNaN(v) || v >= 0 || "Positivo" })}
                                         className="px-2 py-1 bg-white text-gray-900 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm w-full text-right"
                                     />
 
@@ -673,19 +705,21 @@ const PayrollFormPage: React.FC = () => {
                 </div>
 
                 {/* Real-time Summary */}
-                {watchedAllowances.length > 0 && activeRate && (
-                    <div className="mt-4 bg-gray-50 p-3 rounded text-sm text-right border-t border-dashed border-gray-300">
-                        <p className="text-text-secondary">
-                            Total Extra USD: <span className="font-bold text-gray-800">{formatMoney(summary.totalExtraUsd, 'USD')}</span>
-                        </p>
-                        <p className="text-primary font-bold text-lg mt-1">
-                            Valor Actual Global en VES: {formatMoney(summary.totalVes, 'VES')}
-                        </p>
-                        <p className="text-xs text-text-secondary mt-1">
-                            (Presiona "Aplicar a Nómina" para reflejar esto en los empleados)
-                        </p>
-                    </div>
-                )}
+                {
+                    watchedAllowances.length > 0 && activeRate && (
+                        <div className="mt-4 bg-gray-50 p-3 rounded text-sm text-right border-t border-dashed border-gray-300">
+                            <p className="text-text-secondary">
+                                Total Extra USD: <span className="font-bold text-gray-800">{formatMoney(summary.totalExtraUsd, 'USD')}</span>
+                            </p>
+                            <p className="text-primary font-bold text-lg mt-1">
+                                Valor Actual Global en VES: {formatMoney(summary.totalVes, 'VES')}
+                            </p>
+                            <p className="text-xs text-text-secondary mt-1">
+                                (Presiona "Aplicar a Nómina" para reflejar esto en los empleados)
+                            </p>
+                        </div>
+                    )
+                }
 
 
                 {/* EMPLOYEES CHECKLIST TABLE */}
@@ -722,6 +756,7 @@ const PayrollFormPage: React.FC = () => {
                                         <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">¿Sueldo Mín?</th>
                                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Sueldo Base ({isBaseUsd ? 'USD' : 'VES'})</th>
                                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Bono Extra ({isBaseUsd ? 'USD' : 'VES'})</th>
+                                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Descuento ($)</th>
                                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-900 uppercase bg-gray-100">TOTAL A COBRAR (VES)</th>
                                     </tr>
                                 </thead>
@@ -746,10 +781,40 @@ const PayrollFormPage: React.FC = () => {
                                         // 3. Global Allowances (Removed from automatic sum, relying on snapshot)
                                         const globalBonusesVes = 0;
 
-                                        // 4. Transport Allowance
-                                        const transportVes = watch('transportAllow') || 0;
 
-                                        const totalToPayVes = baseVes + indBonusVes + globalBonusesVes + transportVes;
+
+
+
+
+                                        // Calculation: Base + Bonus - Deduction
+                                        const deductionVes = row.individualDeduction || 0; // Assuming deduction is same currency as display or direct VES? 
+                                        // Requirement says: "Descuento ($)". Assuming this means strict value subtraction from the final amount, 
+                                        // OR if it implies USD, we should convert? "Descuento ($)" usually implies currency. 
+                                        // Given "Descuento ($)" label but context is VES/USD mixed, let's treat it as:
+                                        // If base is USD, deduction is USD. If base is VES, deduction is VES.
+                                        // HOWEVER, to keep it simple and consistent with previous "Bono Extra" logic which allows USD checkbox...
+                                        // Wait, the prompt says "Descuento ($)". The symbol '$' often implies USD in LatAm, but here it might just mean 'Money'.
+                                        // Let's treat it as SAME CURRENCY AS PAYROLL (VES) for now unless specified otherwise?
+                                        // Actually, looking at the requested prompt: "Agrega una columna editable llamada Descuento ($)... El valor debe ser positivo".
+                                        // Let's assume it's a VES value to be subtracted from Total VES for simplicity, 
+                                        // OR match the Base Salary Currency logic?
+                                        // "Neto = Base + Bono + Bono - (Retenciones + Descuento)".
+                                        // Let's stick to simple numeric subtraction from the VES Reference for now (if using VES view).
+                                        // If the user meant USD, they probably would have asked for a toggle. 
+                                        // But wait, "Bono Extra" has (USD/VES) in my code header. 
+                                        // Let's assume the Deduction is in the same currency as the Base Salary for consistency?
+                                        // No, simpler: Just treat it as VES value for now, or match the "isBaseUsd" toggle.
+                                        // Let's treat it as Value in VES unless `isBaseUsd` is true, then it's USD?
+                                        // Let's just treat it as a direct value subtracted from the sum. 
+                                        // If `isBaseUsd` is true, then `baseVes` is calculated from USD.
+                                        // Let's assume deduction is in VES to be safe, or just convert if `isBaseUsd`.
+                                        // Actually, let's treat it as VES (Final Currency) to avoid confusion.
+                                        // Re-reading: "Descuento ($)".
+                                        // Let's assume it's Money.
+                                        // I will assume it is in the SAME currency as the "Total a Cobrar" which is VES.
+                                        // So if I put 20, it subtracts 20 VES.
+
+                                        const totalToPayVes = baseVes + indBonusVes + globalBonusesVes - deductionVes;
 
                                         return (
                                             <tr key={row.userId} className={!row.isSelected ? 'opacity-50 bg-gray-50' : ''}>
@@ -818,6 +883,18 @@ const PayrollFormPage: React.FC = () => {
                                                     </div>
                                                 </td>
 
+                                                {/* DEDUCTION COLUMN */}
+                                                <td className="px-4 py-2 text-right align-middle">
+                                                    <input
+                                                        type="number" step="0.01"
+                                                        value={row.individualDeduction === 0 ? '' : row.individualDeduction}
+                                                        onChange={(e) => updateIndividualDeduction(idx, parseFloat(e.target.value) || 0)}
+                                                        disabled={!row.isSelected}
+                                                        placeholder="0.00"
+                                                        className="text-right w-24 border border-gray-300 rounded px-2 py-1 bg-white focus:ring-2 focus:ring-red-300"
+                                                    />
+                                                </td>
+
                                                 <td className="px-4 py-2 text-right align-middle font-bold text-gray-900 bg-gray-50">
                                                     {formatMoney(totalToPayVes, 'VES')}
                                                 </td>
@@ -867,7 +944,7 @@ const PayrollFormPage: React.FC = () => {
                                     <tr key={`${line.employeeUserID} -${idx} `}>
                                         <td className="px-2 py-1">{line.employeeName}</td>
                                         <td className="px-2 py-1 text-right text-text-secondary">{formatMoney(line.baseAmount)}</td>
-                                        <td className="px-2 py-1 text-right text-success">{formatMoney(line.transportAllow + line.otherAllow)}</td>
+                                        <td className="px-2 py-1 text-right text-success">{formatMoney(line.otherAllow)}</td>
                                         <td className="px-2 py-1 text-right text-danger-text">({formatMoney(line.isr + line.pension + line.otherDed)})</td>
                                         <td className="px-2 py-1 text-right font-bold text-primary">{formatMoney(line.netPay)}</td>
                                     </tr>

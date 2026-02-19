@@ -69,7 +69,7 @@ const PurchaseFormPage: React.FC = () => {
                 .finally(() => setLoading(false));
         }
     }, [user]);
-    
+
     const handleProductChange = (index: number, productId: string) => {
         const product = products.find(p => p.productID === Number(productId));
         if (product) {
@@ -77,7 +77,7 @@ const PurchaseFormPage: React.FC = () => {
             setValue(`lines.${index}.unitCost`, product.costPrice);
         }
     };
-    
+
     const handleProductCreated = (newProduct: Product) => {
         setProducts(prev => [...prev, newProduct].sort((a, b) => a.name.localeCompare(b.name)));
         append({
@@ -102,7 +102,7 @@ const PurchaseFormPage: React.FC = () => {
                 ...data,
                 schoolID: user.schoolId,
                 createdByUserID: user.userId,
-                lines: data.lines.map(l => ({...l, productID: Number(l.productID)}))
+                lines: data.lines.map(l => ({ ...l, productID: Number(l.productID) }))
             });
             navigate('/purchases');
         } catch (err: any) {
@@ -110,18 +110,19 @@ const PurchaseFormPage: React.FC = () => {
             setLoading(false);
         }
     };
-    
+
     const inputClasses = "p-2 bg-surface text-text-primary border border-border rounded-md shadow-sm w-full focus:outline-none focus:ring-2 focus:ring-accent/50";
 
     return (
         <div className="max-w-4xl mx-auto bg-surface p-8 rounded-lg shadow-md">
             <h1 className="text-2xl font-bold text-text-primary mb-6 flex items-center"><ShoppingCartIcon /><span className="ml-2">Registrar Nueva Compra</span></h1>
             {error && <div className="bg-danger-light text-danger-text p-3 rounded mb-4">{error}</div>}
-            
+
             {isCreateProductModalOpen && (
                 <CreateProductModal
                     onClose={() => setIsCreateProductModalOpen(false)}
                     onProductCreated={handleProductCreated}
+                    isExpense={true}
                 />
             )}
 
@@ -138,14 +139,14 @@ const PurchaseFormPage: React.FC = () => {
                         <input {...register('condicionPago')} placeholder="Condición de Pago" className={inputClasses} />
                     </div>
                 </fieldset>
-                
+
                 {/* Lines */}
                 <fieldset className="border p-4 rounded-md">
                     <legend className="px-2 font-semibold">Items de la Compra</legend>
                     <div className="space-y-2">
                         {fields.map((field, index) => (
                             <div key={field.id} className="grid grid-cols-12 gap-2 items-center">
-                                <Controller control={control} name={`lines.${index}.productID`} rules={{required: true}} render={({field}) => (
+                                <Controller control={control} name={`lines.${index}.productID`} rules={{ required: true }} render={({ field }) => (
                                     <select {...field} onChange={e => { field.onChange(e); handleProductChange(index, e.target.value); }} className={`${inputClasses} col-span-3`}>
                                         <option value="">Seleccionar producto</option>
                                         {products.map(p => <option key={p.productID} value={p.productID}>{p.name}</option>)}
@@ -159,7 +160,7 @@ const PurchaseFormPage: React.FC = () => {
                             </div>
                         ))}
                     </div>
-                     <div className="mt-4 flex justify-between items-center">
+                    <div className="mt-4 flex justify-between items-center">
                         <button type="button" onClick={() => append({ productID: 0, descripcion: '', cantidad: 1, unitCost: 0, taxRate: 16 })} className="text-sm text-primary hover:underline">
                             + Agregar Línea
                         </button>
@@ -168,13 +169,13 @@ const PurchaseFormPage: React.FC = () => {
                         </button>
                     </div>
                 </fieldset>
-                
+
                 {/* Totals */}
                 <div className="flex justify-end">
                     <div className="w-full md:w-1/2 text-sm space-y-1">
-                         <div className="flex justify-between p-1"><span className="font-semibold">Subtotal:</span><span>{totals.subtotal.toFixed(2)}</span></div>
-                         <div className="flex justify-between p-1"><span className="font-semibold">Monto IVA:</span><span>{totals.iva.toFixed(2)}</span></div>
-                         <div className="flex justify-between font-bold text-lg border-t pt-1 p-1"><span >Total General:</span><span>{totals.total.toFixed(2)} {watch('moneda')}</span></div>
+                        <div className="flex justify-between p-1"><span className="font-semibold">Subtotal:</span><span>{totals.subtotal.toFixed(2)}</span></div>
+                        <div className="flex justify-between p-1"><span className="font-semibold">Monto IVA:</span><span>{totals.iva.toFixed(2)}</span></div>
+                        <div className="flex justify-between font-bold text-lg border-t pt-1 p-1"><span >Total General:</span><span>{totals.total.toFixed(2)} {watch('moneda')}</span></div>
                     </div>
                 </div>
 

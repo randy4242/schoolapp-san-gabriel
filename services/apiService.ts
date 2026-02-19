@@ -19,9 +19,10 @@ import {
   GenerateWithholdingPayload, GenerateWithholdingResponse, WithholdingListItem,
   WithholdingDetail, Question, QuestionOption, TakeExamEvaluation, EvaluationQnA,
   StudentSubmission, ExamSubmissionDetail, EvaluationContent, CreateContentDTO,
-  AnswerPayload, AttendanceUpsertDto,
-  // AGREGADO: Importamos el tipo para la respuesta de estadísticas diarias si
-  DailyAttendanceStatsResponse, GenderStatsResponse
+  AnswerPayload, AttendanceUpsertDto, School,
+  // AGREGADO: Importamos el tipo para la respuesta de estadísticas diarias si comentario publicar
+  DailyAttendanceStatsResponse, GenderStatsResponse, BoletaEvaluationPlan, IndicatorDto,
+  BoletaEvaluationPlanCreateDto, BoletaEvaluationPlanUpdateDto, IndicatorCreateDto, IndicatorUpdateDto
 } from '../types';
 
 const BASE_URL = "https://santarosasis.somee.com/";
@@ -256,8 +257,12 @@ class ApiService {
     return this.request<MedicalInfo>(`api/medical-info/${userId}?schoolid=${schoolId}`);
   }
 
+  async getSchoolById(schoolId: number): Promise<School> {
+    return this.request<School>(`api/schools/${schoolId}`);
+  }
+
   async getSchoolName(schoolId: number): Promise<string> {
-    const school = await this.request<{ name: string }>(`api/schools/${schoolId}`);
+    const school = await this.getSchoolById(schoolId);
     return school.name;
   }
 
@@ -788,6 +793,63 @@ class ApiService {
     });
   }
 
+  // Boleta Evaluation Plans & Indicators
+  async getBoletaPlans(schoolId: number, lapsoId?: number): Promise<BoletaEvaluationPlan[]> {
+    let url = `api/BoletaEvaluationPlan?schoolId=${schoolId}`;
+    if (lapsoId) url += `&lapsoId=${lapsoId}`;
+    return this.request<BoletaEvaluationPlan[]>(url);
+  }
+
+  async getBoletaPlanById(planId: number): Promise<BoletaEvaluationPlan> {
+    return this.request<BoletaEvaluationPlan>(`api/BoletaEvaluationPlan/${planId}`);
+  }
+
+  async getIndicatorsByPlan(planId: number): Promise<IndicatorDto[]> {
+    return this.request<IndicatorDto[]>(`api/Indicator/ByPlan/${planId}`);
+  }
+
+  // ... Plans CRUD
+  async createBoletaPlan(plan: BoletaEvaluationPlanCreateDto): Promise<BoletaEvaluationPlan> {
+    return this.request<BoletaEvaluationPlan>('api/BoletaEvaluationPlan', {
+      method: 'POST',
+      body: JSON.stringify(plan)
+    });
+  }
+
+  async updateBoletaPlan(planId: number, plan: BoletaEvaluationPlanUpdateDto): Promise<void> {
+    return this.request<void>(`api/BoletaEvaluationPlan/${planId}`, {
+      method: 'PUT',
+      body: JSON.stringify(plan)
+    });
+  }
+
+  async deleteBoletaPlan(planId: number): Promise<void> {
+    return this.request<void>(`api/BoletaEvaluationPlan/${planId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  // ... Indicators CRUD
+  async createIndicator(indicator: IndicatorCreateDto): Promise<IndicatorDto> {
+    return this.request<IndicatorDto>('api/Indicator', {
+      method: 'POST',
+      body: JSON.stringify(indicator)
+    });
+  }
+
+  async updateIndicator(indicatorId: number, indicator: IndicatorUpdateDto): Promise<void> {
+    return this.request<void>(`api/Indicator/${indicatorId}`, {
+      method: 'PUT',
+      body: JSON.stringify(indicator)
+    });
+  }
+
+  async deleteIndicator(indicatorId: number): Promise<void> {
+    return this.request<void>(`api/Indicator/${indicatorId}`, {
+      method: 'DELETE'
+    });
+  }
+
   // Products
   async getProductsWithAudiences(schoolId: number): Promise<ProductWithAudiences[]> {
     const products = await this.request<Product[]>(`api/products?schoolid=${schoolId}`);
@@ -799,21 +861,21 @@ class ApiService {
   }
 
   async createProduct(payload: Omit<Product, 'productID' | 'createdAt'> & { audiences: AudiencePayload[] }): Promise<Product> {
-    const { audiences, ...productPayload } = payload;
     return this.request<Product>('api/products', {
       method: 'POST',
-      body: JSON.stringify(productPayload)
+      body: JSON.stringify(payload)
     });
   }
 
 
   // Billing
   async getExchangeRates(schoolId: number): Promise<import('../types').ExchangeRate[]> {
-    return this.request<import('../types').ExchangeRate[]>(`api/billing/exchange-rates?schoolid=${schoolId}`);
+    // Changed to use InvoicesController endpoint to allow Parent access
+    return this.request<import('../types').ExchangeRate[]>(`api/invoices/exchange-rates?schoolId=${schoolId}`);
   }
 
   async updateExchangeRate(schoolId: number, rate: number, notes: string | null): Promise<import('../types').ExchangeRate> {
-    return this.request<import('../types').ExchangeRate>('api/billing/exchange-rates', {
+    return this.request<import('../types').ExchangeRate>('api/invoices/exchange-rates', {
       method: 'POST',
       body: JSON.stringify({
         schoolID: schoolId,
